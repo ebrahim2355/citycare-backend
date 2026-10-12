@@ -9,6 +9,9 @@ const envSchema = z.object({
     PORT: z.coerce.number().int().positive().default(5000),
     APP_URL: z.url().optional(),
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+    JWT_ACCESS_SECRET: z.string("JWT_ACCESS_SECRET is required").min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
+    JWT_ACCESS_EXPIRES_IN: z.string().default("1h"),
+    BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(10),
     CORS_ORIGINS: z.string().default(""),
     RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().positive().default(15),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -31,6 +34,11 @@ const config = {
     isProduction: env.NODE_ENV === "production",
     port: env.PORT,
     databaseUrl: env.DATABASE_URL,
+    jwt: {
+        accessSecret: env.JWT_ACCESS_SECRET,
+        accessExpiresIn: env.JWT_ACCESS_EXPIRES_IN,
+    },
+    saltRounds: env.BCRYPT_SALT_ROUNDS,
     corsOrigins: env.CORS_ORIGINS.split(",")
         .map((origin) => origin.trim().replace(/\/$/, ""))
         .filter(Boolean),
