@@ -8,6 +8,7 @@ const envSchema = z.object({
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     PORT: z.coerce.number().int().positive().default(5000),
     APP_URL: z.url().optional(),
+    DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -25,6 +26,7 @@ const config = {
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === "production",
     port: env.PORT,
+    databaseUrl: env.DATABASE_URL,
     appUrl: (env.APP_URL ?? (vercelUrl ? `https://${vercelUrl}` : `http://localhost:${env.PORT}`)).replace(/\/$/, ""),
 };
 
