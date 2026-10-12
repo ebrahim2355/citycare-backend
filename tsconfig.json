@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "rootDir": "./src",
+        "target": "es2023",
+        "lib": ["es2023"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "types": ["node"],
+        "typeRoots": ["./node_modules/@types"],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "noEmit": true
+    },
+    "include": ["src"]
+}
