@@ -40,9 +40,12 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
+  department         Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+  complaints         Complaint[]       @relation("CitizenComplaints")
+  assignedComplaints Complaint[]       @relation("AssignedComplaints")
+  complaintUpdates   ComplaintUpdate[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -102,6 +105,7 @@ model Department {
 
   categories Category[]
   staff      User[]
+  complaints Complaint[]
 
   @@index([deletedAt])
   @@map("departments")
@@ -120,10 +124,99 @@ model Category {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  department Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  complaints Complaint[]
 
   @@index([departmentId])
   @@index([type, isActive])
   @@index([deletedAt])
   @@map("categories")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintStatus {
+  PENDING_PAYMENT
+  SUBMITTED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+enum ComplaintPaymentStatus {
+  NOT_REQUIRED
+  UNPAID
+  PAID
+  REFUNDED
+}
+
+model Complaint {
+  id              String                 @id @default(uuid())
+  trackingCode    String                 @unique
+  title           String
+  description     String
+  type            CategoryType
+  priority        Priority               @default(MEDIUM)
+  status          ComplaintStatus        @default(SUBMITTED)
+  address         String
+  area            String
+  latitude        Float?
+  longitude       Float?
+  fee             Decimal                @default(0) @db.Decimal(10, 2)
+  paymentStatus   ComplaintPaymentStatus @default(NOT_REQUIRED)
+  citizenId       String
+  categoryId      String
+  departmentId    String
+  assignedStaffId String?
+  submittedAt     DateTime?
+  assignedAt      DateTime?
+  dueAt           DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  resolutionNote  String?
+  rejectionReason String?
+  reopenCount     Int                    @default(0)
+  deletedAt       DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  citizen       User              @relation("CitizenComplaints", fields: [citizenId], references: [id], onDelete: Restrict)
+  assignedStaff User?             @relation("AssignedComplaints", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  category      Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  department    Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  updates       ComplaintUpdate[]
+
+  @@index([citizenId, status])
+  @@index([assignedStaffId, status])
+  @@index([departmentId, status])
+  @@index([categoryId])
+  @@index([status, dueAt])
+  @@index([area])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("complaints")
+}
+
+model ComplaintUpdate {
+  id          String           @id @default(uuid())
+  complaintId String
+  actorId     String?
+  fromStatus  ComplaintStatus?
+  toStatus    ComplaintStatus
+  note        String?
+  createdAt   DateTime         @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([complaintId, createdAt])
+  @@map("complaint_updates")
 }
