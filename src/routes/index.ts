@@ -2,6 +2,7 @@ import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import prisma from "../lib/prisma";
 import { AuthRoutes } from "../modules/auth/auth.routes";
+import { CategoryRoutes } from "../modules/category/category.routes";
 import { DepartmentRoutes } from "../modules/department/department.routes";
 import { UserRoutes } from "../modules/user/user.routes";
 import catchAsync from "../utils/catchAsync";
@@ -26,6 +27,7 @@ const moduleRoutes = [
     { path: "/auth", route: AuthRoutes },
     { path: "/users", route: UserRoutes },
     { path: "/departments", route: DepartmentRoutes },
+    { path: "/categories", route: CategoryRoutes },
 ];
 
 for (const moduleRoute of moduleRoutes) {
