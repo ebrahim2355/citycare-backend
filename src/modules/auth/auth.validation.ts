@@ -34,6 +34,12 @@ const loginSchema = z.object({
     }),
 });
 
+const refreshTokenSchema = z.object({
+    body: z.object({
+        refreshToken: z.string("refreshToken is required").min(20, "refreshToken is not valid"),
+    }),
+});
+
 export type TRegisterPayload = z.infer<typeof registerSchema>["body"];
 export type TLoginPayload = z.infer<typeof loginSchema>["body"];
 
@@ -42,4 +48,5 @@ export const AuthValidation = {
     emailSchema,
     registerSchema,
     loginSchema,
+    refreshTokenSchema,
 };

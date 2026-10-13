@@ -1,10 +1,11 @@
 import { StatusCodes } from "http-status-codes";
 import catchAsync from "../../utils/catchAsync";
+import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
 import { AuthService } from "./auth.service";
 
 const register = catchAsync(async (req, res) => {
-    const result = await AuthService.registerUser(req.body);
+    const result = await AuthService.registerUser(req.body, getRequestContext(req));
 
     sendResponse(res, {
         statusCode: StatusCodes.CREATED,
@@ -14,7 +15,7 @@ const register = catchAsync(async (req, res) => {
 });
 
 const login = catchAsync(async (req, res) => {
-    const result = await AuthService.loginUser(req.body);
+    const result = await AuthService.loginUser(req.body, getRequestContext(req));
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -23,7 +24,28 @@ const login = catchAsync(async (req, res) => {
     });
 });
 
+const refreshToken = catchAsync(async (req, res) => {
+    const result = await AuthService.refreshAccessToken(req.body.refreshToken, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Token refreshed successfully",
+        data: result,
+    });
+});
+
+const logout = catchAsync(async (req, res) => {
+    await AuthService.logoutUser(req.body.refreshToken);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Logged out successfully",
+    });
+});
+
 export const AuthController = {
     register,
     login,
+    refreshToken,
+    logout,
 };
