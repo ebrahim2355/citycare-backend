@@ -8,6 +8,8 @@ export const safeUserSelect = {
     phone: true,
     address: true,
     avatarUrl: true,
+    departmentId: true,
+    department: { select: { id: true, name: true } },
     createdAt: true,
     updatedAt: true,
 } as const;

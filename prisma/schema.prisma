@@ -24,25 +24,28 @@ enum AuthProvider {
 }
 
 model User {
-  id        String       @id @default(uuid())
-  name      String
-  email     String       @unique
-  password  String?
-  role      Role         @default(CITIZEN)
-  status    UserStatus   @default(ACTIVE)
-  provider  AuthProvider @default(LOCAL)
-  googleId  String?      @unique
-  phone     String?
-  address   String?
-  avatarUrl String?
-  deletedAt DateTime?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  password     String?
+  role         Role         @default(CITIZEN)
+  status       UserStatus   @default(ACTIVE)
+  provider     AuthProvider @default(LOCAL)
+  googleId     String?      @unique
+  phone        String?
+  address      String?
+  avatarUrl    String?
+  departmentId String?
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
+  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
 
   @@index([role, status])
+  @@index([departmentId])
   @@index([deletedAt])
   @@map("users")
 }
@@ -81,4 +84,46 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+enum CategoryType {
+  COMPLAINT
+  SERVICE
+}
+
+model Department {
+  id           String    @id @default(uuid())
+  name         String    @unique
+  description  String?
+  contactEmail String?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  categories Category[]
+  staff      User[]
+
+  @@index([deletedAt])
+  @@map("departments")
+}
+
+model Category {
+  id           String       @id @default(uuid())
+  name         String       @unique
+  description  String?
+  type         CategoryType @default(COMPLAINT)
+  fee          Decimal      @default(0) @db.Decimal(10, 2)
+  slaHours     Int          @default(72)
+  isActive     Boolean      @default(true)
+  departmentId String
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@index([departmentId])
+  @@index([type, isActive])
+  @@index([deletedAt])
+  @@map("categories")
 }
