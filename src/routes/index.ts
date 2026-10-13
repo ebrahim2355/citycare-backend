@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import prisma from "../lib/prisma";
 import { AuthRoutes } from "../modules/auth/auth.routes";
 import { CategoryRoutes } from "../modules/category/category.routes";
+import { ComplaintRoutes } from "../modules/complaint/complaint.routes";
 import { DepartmentRoutes } from "../modules/department/department.routes";
 import { UserRoutes } from "../modules/user/user.routes";
 import catchAsync from "../utils/catchAsync";
@@ -28,6 +29,7 @@ const moduleRoutes = [
     { path: "/users", route: UserRoutes },
     { path: "/departments", route: DepartmentRoutes },
     { path: "/categories", route: CategoryRoutes },
+    { path: "/complaints", route: ComplaintRoutes },
 ];
 
 for (const moduleRoute of moduleRoutes) {

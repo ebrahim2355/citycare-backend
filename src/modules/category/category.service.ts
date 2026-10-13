@@ -1,11 +1,12 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import { CategoryType, type Prisma, Role } from "../../generated/prisma/client";
+import { CategoryType, ComplaintStatus, type Prisma, Role } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { OPEN_STATUSES } from "../complaint/complaint.constant";
 import type { TCategoryQuery, TCreateCategoryPayload, TUpdateCategoryPayload } from "./category.validation";
 
 const categorySelect = {
@@ -147,6 +148,18 @@ const updateCategory = async (actorId: string, id: string, payload: TUpdateCateg
 
 const deleteCategory = async (actorId: string, id: string, context: IRequestContext) => {
     const category = await findCategoryOrThrow(id);
+
+    const openComplaints = await prisma.complaint.count({
+        where: { categoryId: id, deletedAt: null, status: { in: [ComplaintStatus.PENDING_PAYMENT, ...OPEN_STATUSES] } },
+    });
+
+    if (openComplaints > 0) {
+        throw new AppError(
+            StatusCodes.CONFLICT,
+            "Category is in use",
+            `${openComplaints} open complaints use this category. Set it inactive instead, or close them first.`
+        );
+    }
 
     await prisma.$transaction(async (tx) => {
         await tx.category.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });

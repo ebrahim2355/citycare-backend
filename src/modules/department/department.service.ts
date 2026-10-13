@@ -1,10 +1,11 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import { Role } from "../../generated/prisma/client";
+import { ComplaintStatus, Role } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { OPEN_STATUSES } from "../complaint/complaint.constant";
 import type { TCreateDepartmentPayload, TUpdateDepartmentPayload } from "./department.validation";
 
 const departmentSelect = {
@@ -118,16 +119,19 @@ const updateDepartment = async (actorId: string, id: string, payload: TUpdateDep
 const deleteDepartment = async (actorId: string, id: string, context: IRequestContext) => {
     const department = await findDepartmentOrThrow(id);
 
-    const [activeCategories, staffMembers] = await Promise.all([
+    const [activeCategories, staffMembers, openComplaints] = await Promise.all([
         prisma.category.count({ where: { departmentId: id, deletedAt: null } }),
         prisma.user.count({ where: { departmentId: id, role: Role.STAFF, deletedAt: null } }),
+        prisma.complaint.count({
+            where: { departmentId: id, deletedAt: null, status: { in: [ComplaintStatus.PENDING_PAYMENT, ...OPEN_STATUSES] } },
+        }),
     ]);
 
-    if (activeCategories > 0 || staffMembers > 0) {
+    if (activeCategories > 0 || staffMembers > 0 || openComplaints > 0) {
         throw new AppError(
             StatusCodes.CONFLICT,
             "Department is in use",
-            `Move or remove its ${activeCategories} categories and ${staffMembers} staff members first`
+            `Move or remove its ${activeCategories} categories, ${staffMembers} staff members and ${openComplaints} open complaints first`
         );
     }
 
