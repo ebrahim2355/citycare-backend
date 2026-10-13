@@ -3,10 +3,12 @@ import config from "../../config";
 import AppError from "../../errors/AppError";
 import { type Role, UserStatus } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
+import { recordAudit } from "../../utils/auditLog";
 import { createAccessToken } from "../../utils/jwt";
 import { comparePassword, hashPassword } from "../../utils/password";
 import type { IRequestContext } from "../../utils/requestContext";
 import { generateToken, hashToken } from "../../utils/token";
+import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { safeUserSelect } from "../user/user.constant";
 import type { TChangePasswordPayload, TLoginPayload, TRegisterPayload } from "./auth.validation";
 
@@ -157,6 +159,13 @@ const changePassword = async (userId: string, payload: TChangePasswordPayload, c
     await prisma.$transaction([
         prisma.user.update({ where: { id: userId }, data: { password } }),
         prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+        recordAudit(prisma, {
+            actorId: userId,
+            action: AuditAction.PASSWORD_CHANGED,
+            entityType: AuditEntity.USER,
+            entityId: userId,
+            ipAddress: context.ipAddress,
+        }),
     ]);
 
     return issueTokens(user, context);
