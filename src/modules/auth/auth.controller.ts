@@ -1,4 +1,5 @@
 import { StatusCodes } from "http-status-codes";
+import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
@@ -43,9 +44,20 @@ const logout = catchAsync(async (req, res) => {
     });
 });
 
+const changePassword = catchAsync(async (req, res) => {
+    const result = await AuthService.changePassword(currentUser(req).id, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Password changed successfully",
+        data: result,
+    });
+});
+
 export const AuthController = {
     register,
     login,
     refreshToken,
     logout,
+    changePassword,
 };

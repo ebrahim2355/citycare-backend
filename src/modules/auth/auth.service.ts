@@ -8,7 +8,7 @@ import { comparePassword, hashPassword } from "../../utils/password";
 import type { IRequestContext } from "../../utils/requestContext";
 import { generateToken, hashToken } from "../../utils/token";
 import { safeUserSelect } from "../user/user.constant";
-import type { TLoginPayload, TRegisterPayload } from "./auth.validation";
+import type { TChangePasswordPayload, TLoginPayload, TRegisterPayload } from "./auth.validation";
 
 interface ITokenUser {
     id: string;
@@ -139,10 +139,34 @@ const logoutUser = async (refreshToken: string) => {
     });
 };
 
+const changePassword = async (userId: string, payload: TChangePasswordPayload, context: IRequestContext) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    if (user.password) {
+        const isPasswordMatched = payload.currentPassword ? await comparePassword(payload.currentPassword, user.password) : false;
+
+        if (!isPasswordMatched) {
+            throw new AppError(StatusCodes.BAD_REQUEST, "Current password is incorrect", [
+                { field: "currentPassword", message: "Current password is incorrect" },
+            ]);
+        }
+    }
+
+    const password = await hashPassword(payload.newPassword);
+
+    await prisma.$transaction([
+        prisma.user.update({ where: { id: userId }, data: { password } }),
+        prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+    ]);
+
+    return issueTokens(user, context);
+};
+
 export const AuthService = {
     issueTokens,
     registerUser,
     loginUser,
     refreshAccessToken,
     logoutUser,
+    changePassword,
 };

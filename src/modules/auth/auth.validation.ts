@@ -40,8 +40,21 @@ const refreshTokenSchema = z.object({
     }),
 });
 
+const changePasswordSchema = z.object({
+    body: z
+        .object({
+            currentPassword: z.string().optional(),
+            newPassword: passwordSchema,
+        })
+        .refine((body) => body.currentPassword !== body.newPassword, {
+            path: ["newPassword"],
+            message: "New password must be different from the current password",
+        }),
+});
+
 export type TRegisterPayload = z.infer<typeof registerSchema>["body"];
 export type TLoginPayload = z.infer<typeof loginSchema>["body"];
+export type TChangePasswordPayload = z.infer<typeof changePasswordSchema>["body"];
 
 export const AuthValidation = {
     passwordSchema,
@@ -49,4 +62,5 @@ export const AuthValidation = {
     registerSchema,
     loginSchema,
     refreshTokenSchema,
+    changePasswordSchema,
 };

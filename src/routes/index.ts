@@ -2,6 +2,7 @@ import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import prisma from "../lib/prisma";
 import { AuthRoutes } from "../modules/auth/auth.routes";
+import { UserRoutes } from "../modules/user/user.routes";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
 
@@ -20,7 +21,10 @@ router.get(
     })
 );
 
-const moduleRoutes = [{ path: "/auth", route: AuthRoutes }];
+const moduleRoutes = [
+    { path: "/auth", route: AuthRoutes },
+    { path: "/users", route: UserRoutes },
+];
 
 for (const moduleRoute of moduleRoutes) {
     router.use(moduleRoute.path, moduleRoute.route);
