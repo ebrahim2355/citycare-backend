@@ -9,6 +9,7 @@ const envSchema = z.object({
     PORT: z.coerce.number().int().positive().default(5000),
     APP_URL: z.url().optional(),
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+    DATABASE_POOL_MAX: z.coerce.number().int().positive().optional(),
     JWT_ACCESS_SECRET: z.string("JWT_ACCESS_SECRET is required").min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
     JWT_ACCESS_EXPIRES_IN: z.string().default("1h"),
     REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
@@ -61,6 +62,7 @@ const config = {
     isProduction: env.NODE_ENV === "production",
     port: env.PORT,
     databaseUrl: env.DATABASE_URL,
+    databasePoolMax: env.DATABASE_POOL_MAX ?? (process.env.VERCEL ? 5 : 10),
     redisUrl: env.REDIS_URL,
     jwt: {
         accessSecret: env.JWT_ACCESS_SECRET,
