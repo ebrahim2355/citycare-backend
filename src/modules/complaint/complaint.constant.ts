@@ -8,6 +8,8 @@ export const CITIZEN_EDITABLE_STATUSES: ComplaintStatus[] = [ComplaintStatus.PEN
 
 export const CITIZEN_DELETABLE_STATUSES: ComplaintStatus[] = [ComplaintStatus.CANCELLED, ComplaintStatus.REJECTED, ComplaintStatus.CLOSED];
 
+export const FEEDBACK_STATUSES: ComplaintStatus[] = [ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED];
+
 const personSelect = { id: true, name: true, email: true, phone: true } as const;
 
 export const complaintListSelect = {
@@ -58,6 +60,7 @@ export const complaintDetailSelect = {
     department: { select: { id: true, name: true } },
     citizen: { select: personSelect },
     assignedStaff: { select: personSelect },
+    feedback: { select: { id: true, rating: true, comment: true, createdAt: true } },
     updates: {
         select: {
             id: true,

@@ -179,7 +179,20 @@ const transferComplaintSchema = z.object({
     }),
 });
 
+const feedbackSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z.object({
+        rating: z
+            .number("rating must be a number from 1 to 5")
+            .int("rating must be a whole number")
+            .min(1, "rating must be at least 1")
+            .max(5, "rating cannot be more than 5"),
+        comment: z.string().trim().max(500, "comment cannot be longer than 500 characters").optional(),
+    }),
+});
+
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
+export type TFeedbackPayload = z.infer<typeof feedbackSchema>["body"];
 export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
 export type TUpdateComplaintPayload = z.infer<typeof updateComplaintSchema>["body"];
 export type TAssignComplaintPayload = z.infer<typeof assignComplaintSchema>["body"];
@@ -198,6 +211,7 @@ export const ComplaintValidation = {
     cancelComplaintSchema,
     reopenComplaintSchema,
     transferComplaintSchema,
+    feedbackSchema,
 };
 
 export const complaintValidationParts = {

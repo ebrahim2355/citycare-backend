@@ -46,6 +46,7 @@ model User {
   complaints         Complaint[]       @relation("CitizenComplaints")
   assignedComplaints Complaint[]       @relation("AssignedComplaints")
   complaintUpdates   ComplaintUpdate[]
+  feedbacks          Feedback[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -193,6 +194,7 @@ model Complaint {
   category      Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   department    Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   updates       ComplaintUpdate[]
+  feedback      Feedback?
 
   @@index([citizenId, status])
   @@index([assignedStaffId, status])
@@ -219,4 +221,20 @@ model ComplaintUpdate {
 
   @@index([complaintId, createdAt])
   @@map("complaint_updates")
+}
+
+model Feedback {
+  id          String   @id @default(uuid())
+  complaintId String   @unique
+  citizenId   String
+  rating      Int
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  citizen   User      @relation(fields: [citizenId], references: [id], onDelete: Restrict)
+
+  @@index([citizenId])
+  @@index([rating])
+  @@map("feedbacks")
 }

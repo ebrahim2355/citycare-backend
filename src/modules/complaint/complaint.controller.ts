@@ -120,7 +120,18 @@ const transferComplaint = catchAsync(async (req, res) => {
     });
 });
 
+const submitFeedback = catchAsync(async (req, res) => {
+    const result = await ComplaintWorkflow.submitFeedback(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.CREATED,
+        message: "Thank you for your feedback",
+        data: result,
+    });
+});
+
 export const ComplaintController = {
+    submitFeedback,
     createComplaint,
     getComplaints,
     getComplaintById,

@@ -7,11 +7,12 @@ import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
-import { CITIZEN_EDITABLE_STATUSES, OPEN_STATUSES } from "./complaint.constant";
+import { CITIZEN_EDITABLE_STATUSES, FEEDBACK_STATUSES, OPEN_STATUSES } from "./complaint.constant";
 import { addHours, getComplaintDetail, lockComplaint } from "./complaint.utils";
 import type {
     TCancelComplaintPayload,
     TChangeStatusPayload,
+    TFeedbackPayload,
     TReopenComplaintPayload,
     TTransferComplaintPayload,
 } from "./complaint.validation";
@@ -292,9 +293,63 @@ const transferComplaint = async (user: IAuthUser, id: string, payload: TTransfer
     });
 };
 
+const submitFeedback = async (user: IAuthUser, id: string, payload: TFeedbackPayload, context: IRequestContext) => {
+    return prisma.$transaction(async (tx) => {
+        const complaint = await lockComplaint(tx, id);
+
+        if (complaint.citizenId !== user.id) {
+            throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only give feedback on your own complaints");
+        }
+
+        if (!FEEDBACK_STATUSES.includes(complaint.status)) {
+            throw new AppError(
+                StatusCodes.CONFLICT,
+                "Feedback is not allowed yet",
+                `Feedback can be given after the complaint is resolved. This one is ${complaint.status}.`
+            );
+        }
+
+        const existing = await tx.feedback.findUnique({ where: { complaintId: id }, select: { id: true } });
+
+        if (existing) {
+            throw new AppError(StatusCodes.CONFLICT, "Feedback already submitted", "You already gave feedback on this complaint");
+        }
+
+        await tx.feedback.create({
+            data: { complaintId: id, citizenId: user.id, rating: payload.rating, comment: payload.comment ?? null },
+        });
+
+        if (complaint.status === ComplaintStatus.RESOLVED) {
+            await tx.complaint.update({ where: { id }, data: { status: ComplaintStatus.CLOSED, closedAt: new Date() } });
+
+            await tx.complaintUpdate.create({
+                data: {
+                    complaintId: id,
+                    actorId: user.id,
+                    fromStatus: ComplaintStatus.RESOLVED,
+                    toStatus: ComplaintStatus.CLOSED,
+                    note: `Closed by the citizen with a ${payload.rating} star rating`,
+                },
+            });
+        }
+
+        await recordAudit(tx, {
+            actorId: user.id,
+            action: AuditAction.FEEDBACK_SUBMITTED,
+            entityType: AuditEntity.COMPLAINT,
+            entityId: id,
+            metadata: { rating: payload.rating },
+            ipAddress: context.ipAddress,
+        });
+
+        return getComplaintDetail(tx, id);
+    });
+};
+
 export const ComplaintWorkflow = {
     changeStatus,
     cancelComplaint,
     reopenComplaint,
     transferComplaint,
+    submitFeedback,
 };

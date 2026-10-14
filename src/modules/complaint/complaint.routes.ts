@@ -49,5 +49,6 @@ router.post(
     validateRequest(ComplaintValidation.transferComplaintSchema),
     ComplaintController.transferComplaint
 );
+router.post("/:id/feedback", auth(Role.CITIZEN), validateRequest(ComplaintValidation.feedbackSchema), ComplaintController.submitFeedback);
 
 export const ComplaintRoutes = router;
