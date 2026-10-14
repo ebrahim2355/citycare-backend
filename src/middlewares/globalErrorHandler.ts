@@ -1,10 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import { MulterError } from "multer";
 import Stripe from "stripe";
 import { ZodError } from "zod";
 import config from "../config";
 import AppError, { type IErrorItem } from "../errors/AppError";
 import { Prisma } from "../generated/prisma/client";
+import { IMAGE_FIELD, MAX_IMAGE_BYTES, MAX_IMAGES_PER_REQUEST } from "./upload";
 
 interface IErrorResponse {
     statusCode: number;
@@ -71,6 +73,20 @@ const handleStripeError = (error: Stripe.errors.StripeError): IErrorResponse => 
     };
 };
 
+const handleUploadError = (error: MulterError): IErrorResponse => {
+    const messages: Partial<Record<MulterError["code"], string>> = {
+        LIMIT_FILE_SIZE: `Each image can be ${MAX_IMAGE_BYTES / 1024 / 1024} MB at most`,
+        LIMIT_FILE_COUNT: `You can upload ${MAX_IMAGES_PER_REQUEST} images in one request`,
+        LIMIT_UNEXPECTED_FILE: `Send the images in the "${IMAGE_FIELD}" field, ${MAX_IMAGES_PER_REQUEST} at most in one request`,
+    };
+
+    return {
+        statusCode: error.code === "LIMIT_FILE_SIZE" ? StatusCodes.REQUEST_TOO_LONG : StatusCodes.BAD_REQUEST,
+        message: "Image upload failed",
+        errors: [{ field: IMAGE_FIELD, message: messages[error.code] ?? error.message }],
+    };
+};
+
 const globalErrorHandler = (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     let response: IErrorResponse = {
         statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
@@ -96,6 +112,8 @@ const globalErrorHandler = (error: unknown, _req: Request, res: Response, _next:
         };
     } else if (error instanceof Stripe.errors.StripeError) {
         response = handleStripeError(error);
+    } else if (error instanceof MulterError) {
+        response = handleUploadError(error);
     } else if (error instanceof SyntaxError && "status" in error && error.status === StatusCodes.BAD_REQUEST) {
         response = {
             statusCode: StatusCodes.BAD_REQUEST,

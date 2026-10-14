@@ -42,14 +42,15 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  department         Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  department         Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
-  complaints         Complaint[]       @relation("CitizenComplaints")
-  assignedComplaints Complaint[]       @relation("AssignedComplaints")
+  complaints         Complaint[]           @relation("CitizenComplaints")
+  assignedComplaints Complaint[]           @relation("AssignedComplaints")
   complaintUpdates   ComplaintUpdate[]
   feedbacks          Feedback[]
   payments           Payment[]
+  attachments        ComplaintAttachment[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -192,13 +193,14 @@ model Complaint {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
-  citizen       User              @relation("CitizenComplaints", fields: [citizenId], references: [id], onDelete: Restrict)
-  assignedStaff User?             @relation("AssignedComplaints", fields: [assignedStaffId], references: [id], onDelete: SetNull)
-  category      Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  department    Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  citizen       User                  @relation("CitizenComplaints", fields: [citizenId], references: [id], onDelete: Restrict)
+  assignedStaff User?                 @relation("AssignedComplaints", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  category      Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  department    Department            @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   updates       ComplaintUpdate[]
   feedback      Feedback?
   payments      Payment[]
+  attachments   ComplaintAttachment[]
 
   @@index([citizenId, status])
   @@index([assignedStaffId, status])
@@ -279,4 +281,28 @@ model Payment {
   @@index([paymentIntentId])
   @@index([createdAt])
   @@map("payments")
+}
+
+enum AttachmentKind {
+  EVIDENCE
+  RESOLUTION
+}
+
+model ComplaintAttachment {
+  id           String         @id @default(uuid())
+  complaintId  String
+  uploadedById String?
+  kind         AttachmentKind @default(EVIDENCE)
+  url          String
+  publicId     String         @unique
+  format       String?
+  bytes        Int?
+  deletedAt    DateTime?
+  createdAt    DateTime       @default(now())
+
+  complaint  Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  uploadedBy User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([complaintId, deletedAt])
+  @@map("complaint_attachments")
 }

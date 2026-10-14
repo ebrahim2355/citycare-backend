@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../generated/prisma/client";
 import auth from "../../middlewares/auth";
+import { uploadImages } from "../../middlewares/upload";
 import validateRequest from "../../middlewares/validateRequest";
 import { idParamSchema } from "../../validations/common.validation";
 import { ComplaintController } from "./complaint.controller";
@@ -50,5 +51,12 @@ router.post(
     ComplaintController.transferComplaint
 );
 router.post("/:id/feedback", auth(Role.CITIZEN), validateRequest(ComplaintValidation.feedbackSchema), ComplaintController.submitFeedback);
+router.post("/:id/attachments", auth(), validateRequest(idParamSchema), uploadImages, ComplaintController.addAttachments);
+router.delete(
+    "/:id/attachments/:attachmentId",
+    auth(),
+    validateRequest(ComplaintValidation.attachmentParamSchema),
+    ComplaintController.removeAttachment
+);
 
 export const ComplaintRoutes = router;

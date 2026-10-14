@@ -191,6 +191,13 @@ const feedbackSchema = z.object({
     }),
 });
 
+const attachmentParamSchema = z.object({
+    params: z.object({
+        id: uuidSchema(),
+        attachmentId: uuidSchema("attachmentId"),
+    }),
+});
+
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
 export type TFeedbackPayload = z.infer<typeof feedbackSchema>["body"];
 export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
@@ -212,6 +219,7 @@ export const ComplaintValidation = {
     reopenComplaintSchema,
     transferComplaintSchema,
     feedbackSchema,
+    attachmentParamSchema,
 };
 
 export const complaintValidationParts = {

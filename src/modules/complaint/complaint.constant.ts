@@ -12,6 +12,16 @@ export const FEEDBACK_STATUSES: ComplaintStatus[] = [ComplaintStatus.RESOLVED, C
 
 const personSelect = { id: true, name: true, email: true, phone: true } as const;
 
+export const attachmentSelect = {
+    id: true,
+    kind: true,
+    url: true,
+    format: true,
+    bytes: true,
+    createdAt: true,
+    uploadedBy: { select: { id: true, name: true, role: true } },
+} as const;
+
 export const complaintListSelect = {
     id: true,
     trackingCode: true,
@@ -61,6 +71,11 @@ export const complaintDetailSelect = {
     citizen: { select: personSelect },
     assignedStaff: { select: personSelect },
     feedback: { select: { id: true, rating: true, comment: true, createdAt: true } },
+    attachments: {
+        where: { deletedAt: null },
+        select: attachmentSelect,
+        orderBy: { createdAt: "asc" },
+    },
     payments: {
         select: { id: true, amount: true, currency: true, status: true, paidAt: true, refundedAt: true, createdAt: true },
         orderBy: { createdAt: "desc" },

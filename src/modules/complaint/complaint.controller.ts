@@ -6,6 +6,7 @@ import sendResponse from "../../utils/sendResponse";
 import { NotificationService } from "../notification/notification.service";
 import type { TRefundResult } from "../payment/payment.refund";
 import { ComplaintAssignment } from "./complaint.assignment";
+import { ComplaintAttachmentService } from "./complaint.attachment";
 import { ComplaintService } from "./complaint.service";
 import { ComplaintWorkflow } from "./complaint.workflow";
 
@@ -144,7 +145,39 @@ const submitFeedback = catchAsync(async (req, res) => {
     });
 });
 
+const addAttachments = catchAsync(async (req, res) => {
+    const files = Array.isArray(req.files) ? req.files : [];
+    const result = await ComplaintAttachmentService.addAttachments(
+        currentUser(req),
+        req.params.id as string,
+        files,
+        getRequestContext(req)
+    );
+
+    sendResponse(res, {
+        statusCode: StatusCodes.CREATED,
+        message: `${result.length} image${result.length === 1 ? "" : "s"} uploaded successfully`,
+        data: result,
+    });
+});
+
+const removeAttachment = catchAsync(async (req, res) => {
+    await ComplaintAttachmentService.removeAttachment(
+        currentUser(req),
+        req.params.id as string,
+        req.params.attachmentId as string,
+        getRequestContext(req)
+    );
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Image removed successfully",
+    });
+});
+
 export const ComplaintController = {
+    addAttachments,
+    removeAttachment,
     submitFeedback,
     createComplaint,
     getComplaints,

@@ -25,6 +25,10 @@ const envSchema = z.object({
     SMTP_HOST: z.string().default(""),
     SMTP_PORT: z.coerce.number().int().positive().default(587),
     RESET_TOKEN_MINUTES: z.coerce.number().int().positive().default(30),
+    CLOUDINARY_URL: z.string().default(""),
+    CLOUDINARY_CLOUD_NAME: z.string().default(""),
+    CLOUDINARY_API_KEY: z.string().default(""),
+    CLOUDINARY_API_SECRET: z.string().default(""),
     STRIPE_SECRET_KEY: z.string().default(""),
     STRIPE_WEBHOOK_SECRET: z.string().default(""),
     PAYMENT_CURRENCY: z.string().length(3, "PAYMENT_CURRENCY must be a 3 letter code").default("usd"),
@@ -80,6 +84,12 @@ const config = {
         smtpPort: env.SMTP_PORT,
     },
     resetTokenMinutes: env.RESET_TOKEN_MINUTES,
+    cloudinary: {
+        url: env.CLOUDINARY_URL,
+        cloudName: env.CLOUDINARY_CLOUD_NAME,
+        apiKey: env.CLOUDINARY_API_KEY,
+        apiSecret: env.CLOUDINARY_API_SECRET,
+    },
     google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
