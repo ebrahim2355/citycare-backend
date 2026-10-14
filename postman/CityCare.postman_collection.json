@@ -196,7 +196,185 @@
           ]
         },
         {
-          "name": "05 Citizen submits a complaint",
+          "name": "05 CRUD: admin creates a department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/departments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Public Health {{$randomInt}}\",\n    \"description\": \"Mosquito control and public toilets\",\n    \"contactEmail\": \"health@citycare.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data) {",
+                  "    pm.collectionVariables.set('newDepartmentId', body.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 CRUD: anyone reads it",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/departments/{{newDepartmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                "{{newDepartmentId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "07 CRUD: admin updates it",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/departments/{{newDepartmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                "{{newDepartmentId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"description\": \"Mosquito control, public toilets and food safety\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "08 CRUD: admin removes it (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/departments/{{newDepartmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                "{{newDepartmentId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "09 CRUD: it is gone now (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/departments/{{newDepartmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                "{{newDepartmentId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Citizen submits a complaint",
           "request": {
             "method": "POST",
             "header": [
@@ -252,7 +430,7 @@
           ]
         },
         {
-          "name": "06 Anyone tracks it with the tracking code",
+          "name": "11 Anyone tracks it with the tracking code",
           "request": {
             "method": "GET",
             "header": [],
@@ -274,7 +452,7 @@
           "response": []
         },
         {
-          "name": "07 Admin assigns it to the staff member",
+          "name": "12 Admin assigns it to the staff member",
           "request": {
             "method": "POST",
             "header": [
@@ -317,7 +495,7 @@
           "response": []
         },
         {
-          "name": "08 Staff starts the work",
+          "name": "13 Staff starts the work",
           "request": {
             "method": "PATCH",
             "header": [
@@ -360,7 +538,7 @@
           "response": []
         },
         {
-          "name": "09 Staff resolves it",
+          "name": "14 Staff resolves it",
           "request": {
             "method": "PATCH",
             "header": [
@@ -403,7 +581,7 @@
           "response": []
         },
         {
-          "name": "10 Citizen gives feedback",
+          "name": "15 Citizen gives feedback",
           "request": {
             "method": "POST",
             "header": [
@@ -446,7 +624,7 @@
           "response": []
         },
         {
-          "name": "11 Citizen creates a paid service request",
+          "name": "16 Citizen creates a paid service request",
           "request": {
             "method": "POST",
             "header": [
@@ -501,7 +679,7 @@
           ]
         },
         {
-          "name": "12 Citizen starts the Stripe payment",
+          "name": "17 Citizen starts the Stripe payment",
           "request": {
             "method": "POST",
             "header": [
@@ -560,7 +738,7 @@
           ]
         },
         {
-          "name": "13 Citizen verifies the payment",
+          "name": "18 Citizen verifies the payment",
           "request": {
             "method": "POST",
             "header": [
@@ -602,7 +780,7 @@
           "response": []
         },
         {
-          "name": "14 Citizen sees the payment history",
+          "name": "19 Citizen sees the payment history",
           "request": {
             "method": "GET",
             "header": [],
@@ -629,7 +807,7 @@
           "response": []
         },
         {
-          "name": "15 Role check: citizen opens an admin route (403)",
+          "name": "20 Role check: citizen opens an admin route (403)",
           "request": {
             "method": "GET",
             "header": [],
@@ -668,7 +846,7 @@
           ]
         },
         {
-          "name": "16 Role check: staff creates a department (403)",
+          "name": "21 Role check: staff creates a department (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -720,7 +898,7 @@
           ]
         },
         {
-          "name": "17 No token (401)",
+          "name": "22 No token (401)",
           "request": {
             "method": "GET",
             "header": [],
@@ -752,7 +930,7 @@
           ]
         },
         {
-          "name": "18 Validation error (400)",
+          "name": "23 Validation error (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -798,7 +976,7 @@
           ]
         },
         {
-          "name": "19 Not found (404)",
+          "name": "24 Not found (404)",
           "request": {
             "method": "GET",
             "header": [],
@@ -837,7 +1015,7 @@
           ]
         },
         {
-          "name": "20 Admin dashboard stats",
+          "name": "25 Admin dashboard stats",
           "request": {
             "method": "GET",
             "header": [],
@@ -865,7 +1043,7 @@
           "response": []
         },
         {
-          "name": "21 Admin audit logs",
+          "name": "26 Admin audit logs",
           "request": {
             "method": "GET",
             "header": [],
@@ -3267,6 +3445,10 @@
     },
     {
       "key": "serviceCategoryId",
+      "value": ""
+    },
+    {
+      "key": "newDepartmentId",
       "value": ""
     },
     {
