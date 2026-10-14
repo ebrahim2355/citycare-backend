@@ -20,7 +20,7 @@ export const verifyAccessToken = (token: string): ITokenPayload => {
     try {
         const decoded = jwt.verify(token, config.jwt.accessSecret);
 
-        if (typeof decoded === "string") {
+        if (typeof decoded === "string" || typeof decoded.id !== "string") {
             throw new Error("Invalid token payload");
         }
 

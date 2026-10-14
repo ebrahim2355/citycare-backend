@@ -17,6 +17,8 @@ const envSchema = z.object({
     REOPEN_WINDOW_DAYS: z.coerce.number().int().positive().default(7),
     MAX_REOPENS: z.coerce.number().int().min(0).default(2),
     REDIS_URL: z.string().default(""),
+    GOOGLE_CLIENT_ID: z.string().default(""),
+    GOOGLE_CLIENT_SECRET: z.string().default(""),
     STRIPE_SECRET_KEY: z.string().default(""),
     STRIPE_WEBHOOK_SECRET: z.string().default(""),
     PAYMENT_CURRENCY: z.string().length(3, "PAYMENT_CURRENCY must be a 3 letter code").default("usd"),
@@ -40,6 +42,7 @@ const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
 const cleanUrl = (url: string) => url.trim().replace(/\/$/, "");
 const clientUrl = env.CLIENT_URL ? cleanUrl(env.CLIENT_URL) : null;
 const corsOrigins = env.CORS_ORIGINS.split(",").map(cleanUrl).filter(Boolean);
+const appUrl = cleanUrl(env.APP_URL ?? (vercelUrl ? `https://${vercelUrl}` : `http://localhost:${env.PORT}`));
 
 const config = {
     nodeEnv: env.NODE_ENV,
@@ -63,6 +66,11 @@ const config = {
         webhookSecret: env.STRIPE_WEBHOOK_SECRET,
         currency: env.PAYMENT_CURRENCY.toLowerCase(),
     },
+    google: {
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+        redirectUri: `${appUrl}/api/v1/auth/google/callback`,
+    },
     clientUrl,
     corsOrigins,
     clientOrigins: [...new Set([...(clientUrl ? [clientUrl] : []), ...corsOrigins])],
@@ -71,7 +79,7 @@ const config = {
         max: env.RATE_LIMIT_MAX,
         authMax: env.AUTH_RATE_LIMIT_MAX,
     },
-    appUrl: cleanUrl(env.APP_URL ?? (vercelUrl ? `https://${vercelUrl}` : `http://localhost:${env.PORT}`)),
+    appUrl,
 };
 
 export default config;

@@ -52,9 +52,37 @@ const changePasswordSchema = z.object({
         }),
 });
 
+const googleStartSchema = z.object({
+    query: z.object({
+        redirect: z.url("redirect must be a valid URL").optional(),
+        format: z.enum(["json"], "format can only be json").optional(),
+    }),
+});
+
+const googleCallbackSchema = z.object({
+    query: z.object({
+        state: z.string("state is required").min(10, "state is not valid"),
+        code: z.string().optional(),
+        error: z.string().optional(),
+    }),
+});
+
+const googleTokenSchema = z.object({
+    body: z.object({
+        idToken: z.string("idToken is required").min(20, "idToken is not valid"),
+    }),
+});
+
+const googleExchangeSchema = z.object({
+    body: z.object({
+        code: z.string("code is required").min(20, "code is not valid"),
+    }),
+});
+
 export type TRegisterPayload = z.infer<typeof registerSchema>["body"];
 export type TLoginPayload = z.infer<typeof loginSchema>["body"];
 export type TChangePasswordPayload = z.infer<typeof changePasswordSchema>["body"];
+export type TGoogleCallbackQuery = z.infer<typeof googleCallbackSchema>["query"];
 
 export const AuthValidation = {
     passwordSchema,
@@ -63,4 +91,8 @@ export const AuthValidation = {
     loginSchema,
     refreshTokenSchema,
     changePasswordSchema,
+    googleStartSchema,
+    googleCallbackSchema,
+    googleTokenSchema,
+    googleExchangeSchema,
 };
