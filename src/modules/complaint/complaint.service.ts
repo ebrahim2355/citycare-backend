@@ -7,6 +7,7 @@ import { recordAudit } from "../../utils/auditLog";
 import { getMeta, getPagination } from "../../utils/pagination";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { PaymentSettlement } from "../payment/payment.settlement";
 import {
     CITIZEN_DELETABLE_STATUSES,
     CITIZEN_EDITABLE_STATUSES,
@@ -327,7 +328,7 @@ const updateComplaint = async (user: IAuthUser, id: string, payload: TUpdateComp
 const deleteComplaint = async (user: IAuthUser, id: string, context: IRequestContext) => {
     const complaint = await prisma.complaint.findFirst({
         where: { id, deletedAt: null },
-        select: { id: true, citizenId: true, status: true, trackingCode: true },
+        select: { id: true, citizenId: true, status: true, paymentStatus: true, trackingCode: true },
     });
 
     if (!complaint) {
@@ -348,6 +349,14 @@ const deleteComplaint = async (user: IAuthUser, id: string, context: IRequestCon
         }
     }
 
+    if (complaint.paymentStatus === ComplaintPaymentStatus.PAID && OPEN_STATUSES.includes(complaint.status)) {
+        throw new AppError(
+            StatusCodes.CONFLICT,
+            "Complaint cannot be removed now",
+            "This request has a paid service fee. Reject it first so the fee is refunded."
+        );
+    }
+
     await prisma.$transaction(async (tx) => {
         const removed = await tx.complaint.updateMany({ where: { id, deletedAt: null }, data: { deletedAt: new Date() } });
 
@@ -364,6 +373,8 @@ const deleteComplaint = async (user: IAuthUser, id: string, context: IRequestCon
             ipAddress: context.ipAddress,
         });
     });
+
+    await PaymentSettlement.cancelPendingPayments(id);
 };
 
 export const ComplaintService = {

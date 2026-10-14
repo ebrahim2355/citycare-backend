@@ -11,6 +11,7 @@ import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { addHours, lockComplaint } from "../complaint/complaint.utils";
 import { PaymentCheckout } from "./payment.checkout";
 import { paymentSelect } from "./payment.constant";
+import { PaymentRefund } from "./payment.refund";
 
 type TSettleSource = "webhook" | "callback" | "verify";
 
@@ -43,7 +44,7 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
         return null;
     }
 
-    await prisma.$transaction(async (tx) => {
+    const arrivedTooLate = await prisma.$transaction(async (tx) => {
         const complaint = await lockComplaint(tx, payment.complaintId, { includeDeleted: true });
 
         const settled = await tx.payment.updateMany({
@@ -52,7 +53,7 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
         });
 
         if (settled.count === 0) {
-            return;
+            return false;
         }
 
         const canSubmit = complaint.status === ComplaintStatus.PENDING_PAYMENT && !complaint.deletedAt;
@@ -91,9 +92,36 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
             entityId: payment.id,
             metadata: { complaintId: complaint.id, source, sessionId: session.id, complaintStatus: complaint.status },
         });
+
+        return !canSubmit;
     });
 
+    if (arrivedTooLate) {
+        await PaymentRefund.refundForComplaint(payment.complaintId, null, "The request was already closed when the payment arrived.");
+    }
+
     return getPayment(payment.id);
+};
+
+const cancelPendingPayments = async (complaintId: string) => {
+    const pendingPayments = await prisma.payment.findMany({
+        where: { complaintId, status: PaymentStatus.PENDING },
+        select: { transactionId: true },
+    });
+
+    if (!pendingPayments.length) {
+        return;
+    }
+
+    const stripe = config.stripe.secretKey ? getStripe() : null;
+
+    for (const pendingPayment of pendingPayments) {
+        if (stripe) {
+            await PaymentCheckout.expireSession(stripe, pendingPayment.transactionId);
+        }
+
+        await closeUnpaidSession(pendingPayment.transactionId, "CANCELLED");
+    }
 };
 
 const closeUnpaidSession = async (sessionId: string, status: "CANCELLED" | "FAILED") => {
@@ -152,6 +180,15 @@ const handleWebhook = async (rawBody: Buffer | undefined, signature: string | un
         }
         case "checkout.session.async_payment_failed": {
             await closeUnpaidSession(event.data.object.id, "FAILED");
+            break;
+        }
+        case "charge.refunded": {
+            const paymentIntent = event.data.object.payment_intent;
+
+            await PaymentRefund.handleRefundFromStripe(
+                typeof paymentIntent === "string" ? paymentIntent : (paymentIntent?.id ?? null),
+                null
+            );
             break;
         }
         default:
@@ -213,6 +250,7 @@ const handleCancelCallback = async (sessionId: string) => {
 export const PaymentSettlement = {
     settlePaidSession,
     closeUnpaidSession,
+    cancelPendingPayments,
     handleWebhook,
     verifyPayment,
     handleSuccessCallback,

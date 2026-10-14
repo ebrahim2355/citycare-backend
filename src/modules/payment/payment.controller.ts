@@ -4,6 +4,7 @@ import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
 import { PaymentCheckout } from "./payment.checkout";
+import { PaymentRefund } from "./payment.refund";
 import { PaymentSettlement } from "./payment.settlement";
 
 const initiatePayment = catchAsync(async (req, res) => {
@@ -59,10 +60,21 @@ const handleCancel = catchAsync(async (_req, res) => {
     });
 });
 
+const refundPayment = catchAsync(async (req, res) => {
+    const result = await PaymentRefund.refundByAdmin(currentUser(req), req.params.id as string, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Payment refunded successfully",
+        data: result,
+    });
+});
+
 export const PaymentController = {
     initiatePayment,
     handleWebhook,
     verifyPayment,
     handleSuccess,
     handleCancel,
+    refundPayment,
 };

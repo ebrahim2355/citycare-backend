@@ -3,9 +3,16 @@ import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
+import type { TRefundResult } from "../payment/payment.refund";
 import { ComplaintAssignment } from "./complaint.assignment";
 import { ComplaintService } from "./complaint.service";
 import { ComplaintWorkflow } from "./complaint.workflow";
+
+const refundMessages: Record<TRefundResult, string> = {
+    NOT_NEEDED: "",
+    REFUNDED: " The service fee was refunded.",
+    FAILED: " The refund could not be completed now. An admin can retry it from the payment.",
+};
 
 const createComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintService.createComplaint(currentUser(req), req.body, getRequestContext(req));
@@ -85,8 +92,8 @@ const changeStatus = catchAsync(async (req, res) => {
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
-        message: `Complaint status changed to ${result.status}`,
-        data: result,
+        message: `Complaint status changed to ${result.complaint.status}.${refundMessages[result.refund]}`,
+        data: result.complaint,
     });
 });
 
@@ -95,8 +102,8 @@ const cancelComplaint = catchAsync(async (req, res) => {
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
-        message: "Complaint cancelled successfully",
-        data: result,
+        message: `Complaint cancelled successfully.${refundMessages[result.refund]}`,
+        data: result.complaint,
     });
 });
 

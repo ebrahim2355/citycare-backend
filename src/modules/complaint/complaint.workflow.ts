@@ -7,6 +7,8 @@ import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { PaymentRefund, type TRefundResult } from "../payment/payment.refund";
+import { PaymentSettlement } from "../payment/payment.settlement";
 import { CITIZEN_EDITABLE_STATUSES, FEEDBACK_STATUSES, OPEN_STATUSES } from "./complaint.constant";
 import { addHours, getComplaintDetail, lockComplaint } from "./complaint.utils";
 import type {
@@ -32,8 +34,17 @@ const ADMIN_TRANSITIONS: TTransitionMap = {
     [ComplaintStatus.RESOLVED]: [ComplaintStatus.CLOSED],
 };
 
+const closePayments = async (id: string, actorId: string, reason: string, context: IRequestContext) => {
+    await PaymentSettlement.cancelPendingPayments(id);
+
+    const refund = await PaymentRefund.refundForComplaint(id, actorId, reason, context);
+    const complaint = await getComplaintDetail(prisma, id);
+
+    return { complaint, refund };
+};
+
 const changeStatus = async (user: IAuthUser, id: string, payload: TChangeStatusPayload, context: IRequestContext) => {
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
         const complaint = await lockComplaint(tx, id);
 
         if (user.role === Role.STAFF && complaint.assignedStaffId !== user.id) {
@@ -91,10 +102,16 @@ const changeStatus = async (user: IAuthUser, id: string, payload: TChangeStatusP
 
         return getComplaintDetail(tx, id);
     });
+
+    if (payload.status !== ComplaintStatus.REJECTED) {
+        return { complaint: updated, refund: "NOT_NEEDED" as TRefundResult };
+    }
+
+    return closePayments(id, user.id, "The request was rejected.", context);
 };
 
 const cancelComplaint = async (user: IAuthUser, id: string, payload: TCancelComplaintPayload, context: IRequestContext) => {
-    return prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
         const complaint = await lockComplaint(tx, id);
 
         if (complaint.citizenId !== user.id) {
@@ -132,9 +149,9 @@ const cancelComplaint = async (user: IAuthUser, id: string, payload: TCancelComp
             metadata: { from: complaint.status },
             ipAddress: context.ipAddress,
         });
-
-        return getComplaintDetail(tx, id);
     });
+
+    return closePayments(id, user.id, "The request was cancelled by the citizen.", context);
 };
 
 const reopenComplaint = async (user: IAuthUser, id: string, payload: TReopenComplaintPayload, context: IRequestContext) => {

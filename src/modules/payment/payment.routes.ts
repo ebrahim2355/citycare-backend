@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Role } from "../../generated/prisma/client";
 import auth from "../../middlewares/auth";
 import validateRequest from "../../middlewares/validateRequest";
+import { idParamSchema } from "../../validations/common.validation";
 import { PaymentController } from "./payment.controller";
 import { PaymentValidation } from "./payment.validation";
 
@@ -12,5 +13,6 @@ router.post("/webhook", PaymentController.handleWebhook);
 router.post("/verify", auth(Role.CITIZEN), validateRequest(PaymentValidation.verifyPaymentSchema), PaymentController.verifyPayment);
 router.get("/success", validateRequest(PaymentValidation.callbackQuerySchema), PaymentController.handleSuccess);
 router.get("/cancel", validateRequest(PaymentValidation.callbackQuerySchema), PaymentController.handleCancel);
+router.post("/:id/refund", auth(Role.ADMIN), validateRequest(idParamSchema), PaymentController.refundPayment);
 
 export const PaymentRoutes = router;
