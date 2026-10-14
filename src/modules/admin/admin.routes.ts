@@ -3,6 +3,8 @@ import { Role } from "../../generated/prisma/client";
 import auth from "../../middlewares/auth";
 import validateRequest from "../../middlewares/validateRequest";
 import { idParamSchema } from "../../validations/common.validation";
+import { AuditController } from "../audit/audit.controller";
+import { AuditValidation } from "../audit/audit.validation";
 import { StatsController } from "../stats/stats.controller";
 import { AdminController } from "./admin.controller";
 import { AdminValidation } from "./admin.validation";
@@ -18,5 +20,6 @@ router.patch("/users/:id/status", validateRequest(AdminValidation.updateStatusSc
 router.delete("/users/:id", validateRequest(idParamSchema), AdminController.deleteUser);
 router.get("/staff-workload", validateRequest(AdminValidation.staffQuerySchema), AdminController.getStaffWorkload);
 router.get("/dashboard-stats", StatsController.getAdminStats);
+router.get("/audit-logs", validateRequest(AuditValidation.auditLogQuerySchema), AuditController.getAuditLogs);
 
 export const AdminRoutes = router;
