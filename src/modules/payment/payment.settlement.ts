@@ -9,6 +9,7 @@ import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { addHours, lockComplaint } from "../complaint/complaint.utils";
+import { NotificationService } from "../notification/notification.service";
 import { PaymentCheckout } from "./payment.checkout";
 import { paymentSelect } from "./payment.constant";
 import { PaymentRefund } from "./payment.refund";
@@ -44,7 +45,7 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
         return null;
     }
 
-    const arrivedTooLate = await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx): Promise<"already_settled" | "submitted" | "too_late"> => {
         const complaint = await lockComplaint(tx, payment.complaintId, { includeDeleted: true });
 
         const settled = await tx.payment.updateMany({
@@ -53,7 +54,7 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
         });
 
         if (settled.count === 0) {
-            return false;
+            return "already_settled";
         }
 
         const canSubmit = complaint.status === ComplaintStatus.PENDING_PAYMENT && !complaint.deletedAt;
@@ -93,14 +94,20 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
             metadata: { complaintId: complaint.id, source, sessionId: session.id, complaintStatus: complaint.status },
         });
 
-        return !canSubmit;
+        return canSubmit ? "submitted" : "too_late";
     });
 
-    if (arrivedTooLate) {
+    if (outcome === "too_late") {
         await PaymentRefund.refundForComplaint(payment.complaintId, null, "The request was already closed when the payment arrived.");
     }
 
-    return getPayment(payment.id);
+    const settledPayment = await getPayment(payment.id);
+
+    if (outcome === "submitted") {
+        await NotificationService.paymentReceived(settledPayment);
+    }
+
+    return settledPayment;
 };
 
 const cancelPendingPayments = async (complaintId: string) => {

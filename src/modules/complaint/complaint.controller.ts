@@ -3,6 +3,7 @@ import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
+import { NotificationService } from "../notification/notification.service";
 import type { TRefundResult } from "../payment/payment.refund";
 import { ComplaintAssignment } from "./complaint.assignment";
 import { ComplaintService } from "./complaint.service";
@@ -16,6 +17,8 @@ const refundMessages: Record<TRefundResult, string> = {
 
 const createComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintService.createComplaint(currentUser(req), req.body, getRequestContext(req));
+
+    await NotificationService.complaintCreated(result);
 
     sendResponse(res, {
         statusCode: StatusCodes.CREATED,
@@ -80,6 +83,8 @@ const deleteComplaint = catchAsync(async (req, res) => {
 const assignComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintAssignment.assignComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await NotificationService.complaintAssigned(result);
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: `Complaint assigned to ${result.assignedStaff?.name}`,
@@ -89,6 +94,8 @@ const assignComplaint = catchAsync(async (req, res) => {
 
 const changeStatus = catchAsync(async (req, res) => {
     const result = await ComplaintWorkflow.changeStatus(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    await NotificationService.complaintStatusChanged(result.complaint);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,

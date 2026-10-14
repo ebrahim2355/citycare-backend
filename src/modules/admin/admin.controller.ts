@@ -3,6 +3,7 @@ import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
+import { NotificationService } from "../notification/notification.service";
 import { AdminService } from "./admin.service";
 
 const getAllUsers = catchAsync(async (_req, res) => {
@@ -18,6 +19,8 @@ const getAllUsers = catchAsync(async (_req, res) => {
 
 const createUser = catchAsync(async (req, res) => {
     const result = await AdminService.createUser(currentUser(req), req.body, getRequestContext(req));
+
+    await NotificationService.staffAccount(result);
 
     sendResponse(res, {
         statusCode: StatusCodes.CREATED,
