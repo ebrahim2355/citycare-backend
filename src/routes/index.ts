@@ -8,6 +8,7 @@ import { CategoryRoutes } from "../modules/category/category.routes";
 import { ComplaintRoutes } from "../modules/complaint/complaint.routes";
 import { DepartmentRoutes } from "../modules/department/department.routes";
 import { PaymentRoutes } from "../modules/payment/payment.routes";
+import { StatsRoutes } from "../modules/stats/stats.routes";
 import { UserRoutes } from "../modules/user/user.routes";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
@@ -34,6 +35,7 @@ const moduleRoutes = [
     { path: "/categories", route: CategoryRoutes },
     { path: "/complaints", route: ComplaintRoutes },
     { path: "/payments", route: PaymentRoutes },
+    { path: "/stats", route: StatsRoutes },
     { path: "/admin", route: AdminRoutes },
 ];
 
