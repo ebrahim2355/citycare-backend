@@ -1,6 +1,8 @@
 import { randomInt } from "node:crypto";
-import type { ComplaintStatus } from "../../generated/prisma/client";
-import { OPEN_STATUSES } from "./complaint.constant";
+import { StatusCodes } from "http-status-codes";
+import AppError from "../../errors/AppError";
+import type { ComplaintStatus, Prisma } from "../../generated/prisma/client";
+import { complaintDetailSelect, OPEN_STATUSES } from "./complaint.constant";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -23,4 +25,37 @@ export const isOverdue = (complaint: { status: ComplaintStatus; dueAt: Date | nu
 
 export const withOverdue = <T extends { status: ComplaintStatus; dueAt: Date | null }>(complaint: T) => {
     return { ...complaint, isOverdue: isOverdue(complaint) };
+};
+
+export interface ILockedComplaint {
+    id: string;
+    trackingCode: string;
+    status: ComplaintStatus;
+    citizenId: string;
+    departmentId: string;
+    categoryId: string;
+    assignedStaffId: string | null;
+}
+
+export const lockComplaint = async (tx: Prisma.TransactionClient, id: string): Promise<ILockedComplaint> => {
+    const rows = await tx.$queryRaw<ILockedComplaint[]>`
+        SELECT "id", "trackingCode", "status", "citizenId", "departmentId", "categoryId", "assignedStaffId"
+        FROM "complaints"
+        WHERE "id" = ${id} AND "deletedAt" IS NULL
+        FOR UPDATE
+    `;
+
+    const complaint = rows[0];
+
+    if (!complaint) {
+        throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this id");
+    }
+
+    return complaint;
+};
+
+export const getComplaintDetail = async (tx: Prisma.TransactionClient, id: string) => {
+    const complaint = await tx.complaint.findUniqueOrThrow({ where: { id }, select: complaintDetailSelect });
+
+    return withOverdue(complaint);
 };

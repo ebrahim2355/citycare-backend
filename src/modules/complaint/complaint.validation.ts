@@ -112,15 +112,50 @@ const updateComplaintSchema = z.object({
         .refine(hasBothCoordinates, { path: ["longitude"], message: "Send latitude and longitude together" }),
 });
 
+const assignComplaintSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z.object({
+        staffId: uuidSchema("staffId").optional(),
+        note: z
+            .string()
+            .trim()
+            .min(3, "note must be at least 3 characters")
+            .max(300, "note cannot be longer than 300 characters")
+            .optional(),
+    }),
+});
+
+const changeStatusSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z
+        .object({
+            status: z.enum(["IN_PROGRESS", "RESOLVED", "REJECTED", "CLOSED"], "status must be IN_PROGRESS, RESOLVED, REJECTED or CLOSED"),
+            note: z
+                .string()
+                .trim()
+                .min(10, "note must be at least 10 characters")
+                .max(1000, "note cannot be longer than 1000 characters")
+                .optional(),
+        })
+        .refine((body) => !["RESOLVED", "REJECTED"].includes(body.status) || Boolean(body.note), {
+            path: ["note"],
+            message: "A note is required when a complaint is resolved or rejected",
+        }),
+});
+
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
 export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
 export type TUpdateComplaintPayload = z.infer<typeof updateComplaintSchema>["body"];
+export type TAssignComplaintPayload = z.infer<typeof assignComplaintSchema>["body"];
+export type TChangeStatusPayload = z.infer<typeof changeStatusSchema>["body"];
 
 export const ComplaintValidation = {
     createComplaintSchema,
     complaintQuerySchema,
     trackingCodeSchema,
     updateComplaintSchema,
+    assignComplaintSchema,
+    changeStatusSchema,
 };
 
 export const complaintValidationParts = {

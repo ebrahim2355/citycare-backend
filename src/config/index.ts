@@ -13,6 +13,7 @@ const envSchema = z.object({
     JWT_ACCESS_EXPIRES_IN: z.string().default("1h"),
     REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
     BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(10),
+    MAX_ACTIVE_ASSIGNMENTS: z.coerce.number().int().positive().default(5),
     CORS_ORIGINS: z.string().default(""),
     RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().positive().default(15),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -41,6 +42,9 @@ const config = {
     },
     refreshTokenDays: env.REFRESH_TOKEN_DAYS,
     saltRounds: env.BCRYPT_SALT_ROUNDS,
+    complaint: {
+        maxActiveAssignments: env.MAX_ACTIVE_ASSIGNMENTS,
+    },
     corsOrigins: env.CORS_ORIGINS.split(",")
         .map((origin) => origin.trim().replace(/\/$/, ""))
         .filter(Boolean),

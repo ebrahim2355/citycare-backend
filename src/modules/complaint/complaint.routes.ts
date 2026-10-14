@@ -19,5 +19,11 @@ router.patch(
     ComplaintController.updateComplaint
 );
 router.delete("/:id", auth(Role.CITIZEN, Role.ADMIN), validateRequest(idParamSchema), ComplaintController.deleteComplaint);
+router.post(
+    "/:id/assign",
+    auth(Role.ADMIN),
+    validateRequest(ComplaintValidation.assignComplaintSchema),
+    ComplaintController.assignComplaint
+);
 
 export const ComplaintRoutes = router;

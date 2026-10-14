@@ -3,6 +3,7 @@ import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
+import { ComplaintAssignment } from "./complaint.assignment";
 import { ComplaintService } from "./complaint.service";
 
 const createComplaint = catchAsync(async (req, res) => {
@@ -68,6 +69,16 @@ const deleteComplaint = catchAsync(async (req, res) => {
     });
 });
 
+const assignComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintAssignment.assignComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: `Complaint assigned to ${result.assignedStaff?.name}`,
+        data: result,
+    });
+});
+
 export const ComplaintController = {
     createComplaint,
     getComplaints,
@@ -75,4 +86,5 @@ export const ComplaintController = {
     trackComplaint,
     updateComplaint,
     deleteComplaint,
+    assignComplaint,
 };
