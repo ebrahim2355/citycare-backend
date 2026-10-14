@@ -13,6 +13,8 @@ router.post("/webhook", PaymentController.handleWebhook);
 router.post("/verify", auth(Role.CITIZEN), validateRequest(PaymentValidation.verifyPaymentSchema), PaymentController.verifyPayment);
 router.get("/success", validateRequest(PaymentValidation.callbackQuerySchema), PaymentController.handleSuccess);
 router.get("/cancel", validateRequest(PaymentValidation.callbackQuerySchema), PaymentController.handleCancel);
+router.get("/", auth(Role.CITIZEN, Role.ADMIN), validateRequest(PaymentValidation.paymentQuerySchema), PaymentController.getPayments);
+router.get("/:id", auth(Role.CITIZEN, Role.ADMIN), validateRequest(idParamSchema), PaymentController.getPaymentById);
 router.post("/:id/refund", auth(Role.ADMIN), validateRequest(idParamSchema), PaymentController.refundPayment);
 
 export const PaymentRoutes = router;

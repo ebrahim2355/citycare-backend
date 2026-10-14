@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { uuidSchema } from "../../validations/common.validation";
+import { paginationFields, uuidSchema } from "../../validations/common.validation";
 
 const sessionIdSchema = z
     .string("Checkout session id is required")
@@ -25,10 +25,21 @@ const callbackQuerySchema = z.object({
     }),
 });
 
+const paymentQuerySchema = z.object({
+    query: z.object({
+        ...paginationFields,
+        status: z.enum(["PENDING", "COMPLETED", "FAILED", "CANCELLED", "REFUNDED"], "status is not valid").optional(),
+        complaintId: uuidSchema("complaintId").optional(),
+        citizenId: uuidSchema("citizenId").optional(),
+    }),
+});
+
 export type TInitiatePaymentPayload = z.infer<typeof initiatePaymentSchema>["body"];
+export type TPaymentQuery = z.infer<typeof paymentQuerySchema>["query"];
 
 export const PaymentValidation = {
     initiatePaymentSchema,
     verifyPaymentSchema,
     callbackQuerySchema,
+    paymentQuerySchema,
 };

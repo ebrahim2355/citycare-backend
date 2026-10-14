@@ -61,6 +61,10 @@ export const complaintDetailSelect = {
     citizen: { select: personSelect },
     assignedStaff: { select: personSelect },
     feedback: { select: { id: true, rating: true, comment: true, createdAt: true } },
+    payments: {
+        select: { id: true, amount: true, currency: true, status: true, paidAt: true, refundedAt: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+    },
     updates: {
         select: {
             id: true,

@@ -5,6 +5,7 @@ import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
 import { PaymentCheckout } from "./payment.checkout";
 import { PaymentRefund } from "./payment.refund";
+import { PaymentService } from "./payment.service";
 import { PaymentSettlement } from "./payment.settlement";
 
 const initiatePayment = catchAsync(async (req, res) => {
@@ -70,7 +71,30 @@ const refundPayment = catchAsync(async (req, res) => {
     });
 });
 
+const getPayments = catchAsync(async (req, res) => {
+    const result = await PaymentService.getPayments(currentUser(req), res.locals.query);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Payments retrieved successfully",
+        meta: result.meta,
+        data: result.data,
+    });
+});
+
+const getPaymentById = catchAsync(async (req, res) => {
+    const result = await PaymentService.getPaymentById(currentUser(req), req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Payment retrieved successfully",
+        data: result,
+    });
+});
+
 export const PaymentController = {
+    getPayments,
+    getPaymentById,
     initiatePayment,
     handleWebhook,
     verifyPayment,
