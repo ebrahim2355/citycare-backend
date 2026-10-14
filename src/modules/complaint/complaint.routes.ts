@@ -12,5 +12,12 @@ router.post("/", auth(Role.CITIZEN), validateRequest(ComplaintValidation.createC
 router.get("/", auth(), validateRequest(ComplaintValidation.complaintQuerySchema), ComplaintController.getComplaints);
 router.get("/track/:trackingCode", validateRequest(ComplaintValidation.trackingCodeSchema), ComplaintController.trackComplaint);
 router.get("/:id", auth(), validateRequest(idParamSchema), ComplaintController.getComplaintById);
+router.patch(
+    "/:id",
+    auth(Role.CITIZEN, Role.ADMIN),
+    validateRequest(ComplaintValidation.updateComplaintSchema),
+    ComplaintController.updateComplaint
+);
+router.delete("/:id", auth(Role.CITIZEN, Role.ADMIN), validateRequest(idParamSchema), ComplaintController.deleteComplaint);
 
 export const ComplaintRoutes = router;

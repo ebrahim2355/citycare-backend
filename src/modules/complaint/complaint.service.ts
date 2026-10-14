@@ -7,9 +7,15 @@ import { recordAudit } from "../../utils/auditLog";
 import { getMeta, getPagination } from "../../utils/pagination";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
-import { complaintDetailSelect, complaintListSelect, OPEN_STATUSES } from "./complaint.constant";
+import {
+    CITIZEN_DELETABLE_STATUSES,
+    CITIZEN_EDITABLE_STATUSES,
+    complaintDetailSelect,
+    complaintListSelect,
+    OPEN_STATUSES,
+} from "./complaint.constant";
 import { addHours, generateTrackingCode, withOverdue } from "./complaint.utils";
-import type { TComplaintQuery, TCreateComplaintPayload } from "./complaint.validation";
+import type { TComplaintQuery, TCreateComplaintPayload, TUpdateComplaintPayload } from "./complaint.validation";
 
 const MAX_CODE_ATTEMPTS = 3;
 
@@ -250,10 +256,124 @@ const trackComplaint = async (trackingCode: string) => {
     return withOverdue(complaint);
 };
 
+const updateComplaint = async (user: IAuthUser, id: string, payload: TUpdateComplaintPayload, context: IRequestContext) => {
+    const complaint = await prisma.complaint.findFirst({
+        where: { id, deletedAt: null },
+        select: { id: true, citizenId: true, status: true, priority: true },
+    });
+
+    if (!complaint) {
+        throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this id");
+    }
+
+    if (user.role === Role.CITIZEN) {
+        if (complaint.citizenId !== user.id) {
+            throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only edit your own complaints");
+        }
+
+        if (!CITIZEN_EDITABLE_STATUSES.includes(complaint.status)) {
+            throw new AppError(
+                StatusCodes.CONFLICT,
+                "Complaint can no longer be edited",
+                "A complaint can be edited only before it is assigned to a staff member"
+            );
+        }
+    } else {
+        const otherFields = Object.keys(payload).filter((field) => field !== "priority");
+
+        if (otherFields.length) {
+            throw new AppError(
+                StatusCodes.BAD_REQUEST,
+                "Validation failed",
+                otherFields.map((field) => ({ field, message: "An admin can only change the priority" }))
+            );
+        }
+
+        if (![ComplaintStatus.PENDING_PAYMENT, ...OPEN_STATUSES].includes(complaint.status)) {
+            throw new AppError(StatusCodes.CONFLICT, "Complaint can no longer be edited", "This complaint is already finished");
+        }
+    }
+
+    const priorityChanged = payload.priority !== undefined && payload.priority !== complaint.priority;
+
+    const updated = await prisma.$transaction(async (tx) => {
+        const result = await tx.complaint.update({ where: { id }, data: payload, select: complaintDetailSelect });
+
+        if (priorityChanged) {
+            await tx.complaintUpdate.create({
+                data: {
+                    complaintId: id,
+                    actorId: user.id,
+                    fromStatus: complaint.status,
+                    toStatus: complaint.status,
+                    note: `Priority changed from ${complaint.priority} to ${payload.priority}`,
+                },
+            });
+        }
+
+        await recordAudit(tx, {
+            actorId: user.id,
+            action: AuditAction.COMPLAINT_UPDATED,
+            entityType: AuditEntity.COMPLAINT,
+            entityId: id,
+            metadata: { changes: payload },
+            ipAddress: context.ipAddress,
+        });
+
+        return result;
+    });
+
+    return withOverdue(updated);
+};
+
+const deleteComplaint = async (user: IAuthUser, id: string, context: IRequestContext) => {
+    const complaint = await prisma.complaint.findFirst({
+        where: { id, deletedAt: null },
+        select: { id: true, citizenId: true, status: true, trackingCode: true },
+    });
+
+    if (!complaint) {
+        throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this id");
+    }
+
+    if (user.role === Role.CITIZEN) {
+        if (complaint.citizenId !== user.id) {
+            throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only remove your own complaints");
+        }
+
+        if (!CITIZEN_DELETABLE_STATUSES.includes(complaint.status)) {
+            throw new AppError(
+                StatusCodes.CONFLICT,
+                "Complaint cannot be removed now",
+                "Only cancelled, rejected or closed complaints can be removed. Cancel it first."
+            );
+        }
+    }
+
+    await prisma.$transaction(async (tx) => {
+        const removed = await tx.complaint.updateMany({ where: { id, deletedAt: null }, data: { deletedAt: new Date() } });
+
+        if (removed.count === 0) {
+            throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this id");
+        }
+
+        await recordAudit(tx, {
+            actorId: user.id,
+            action: AuditAction.COMPLAINT_DELETED,
+            entityType: AuditEntity.COMPLAINT,
+            entityId: id,
+            metadata: { trackingCode: complaint.trackingCode, status: complaint.status },
+            ipAddress: context.ipAddress,
+        });
+    });
+};
+
 export const ComplaintService = {
     ensureCanView,
     createComplaint,
     getComplaints,
     getComplaintById,
     trackComplaint,
+    updateComplaint,
+    deleteComplaint,
 };

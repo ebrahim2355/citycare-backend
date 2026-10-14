@@ -4,6 +4,10 @@ export const OPEN_STATUSES: ComplaintStatus[] = [ComplaintStatus.SUBMITTED, Comp
 
 export const ACTIVE_ASSIGNMENT_STATUSES: ComplaintStatus[] = [ComplaintStatus.ASSIGNED, ComplaintStatus.IN_PROGRESS];
 
+export const CITIZEN_EDITABLE_STATUSES: ComplaintStatus[] = [ComplaintStatus.PENDING_PAYMENT, ComplaintStatus.SUBMITTED];
+
+export const CITIZEN_DELETABLE_STATUSES: ComplaintStatus[] = [ComplaintStatus.CANCELLED, ComplaintStatus.REJECTED, ComplaintStatus.CLOSED];
+
 const personSelect = { id: true, name: true, email: true, phone: true } as const;
 
 export const complaintListSelect = {

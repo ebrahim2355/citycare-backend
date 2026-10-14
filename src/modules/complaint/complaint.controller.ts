@@ -49,9 +49,30 @@ const trackComplaint = catchAsync(async (req, res) => {
     });
 });
 
+const updateComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintService.updateComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Complaint updated successfully",
+        data: result,
+    });
+});
+
+const deleteComplaint = catchAsync(async (req, res) => {
+    await ComplaintService.deleteComplaint(currentUser(req), req.params.id as string, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Complaint removed successfully",
+    });
+});
+
 export const ComplaintController = {
     createComplaint,
     getComplaints,
     getComplaintById,
     trackComplaint,
+    updateComplaint,
+    deleteComplaint,
 };

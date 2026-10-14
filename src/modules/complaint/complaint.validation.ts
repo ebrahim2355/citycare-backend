@@ -96,13 +96,31 @@ const trackingCodeSchema = z.object({
     }),
 });
 
+const updateComplaintSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z
+        .object({
+            title: complaintFields.title.optional(),
+            description: complaintFields.description.optional(),
+            address: complaintFields.address.optional(),
+            area: complaintFields.area.optional(),
+            priority: complaintFields.priority.optional(),
+            latitude: complaintFields.latitude.optional(),
+            longitude: complaintFields.longitude.optional(),
+        })
+        .refine((body) => Object.keys(body).length > 0, "Send at least one field to update")
+        .refine(hasBothCoordinates, { path: ["longitude"], message: "Send latitude and longitude together" }),
+});
+
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
 export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
+export type TUpdateComplaintPayload = z.infer<typeof updateComplaintSchema>["body"];
 
 export const ComplaintValidation = {
     createComplaintSchema,
     complaintQuerySchema,
     trackingCodeSchema,
+    updateComplaintSchema,
 };
 
 export const complaintValidationParts = {
