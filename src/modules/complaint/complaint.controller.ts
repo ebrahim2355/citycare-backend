@@ -5,6 +5,7 @@ import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
 import { ComplaintAssignment } from "./complaint.assignment";
 import { ComplaintService } from "./complaint.service";
+import { ComplaintWorkflow } from "./complaint.workflow";
 
 const createComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintService.createComplaint(currentUser(req), req.body, getRequestContext(req));
@@ -79,6 +80,16 @@ const assignComplaint = catchAsync(async (req, res) => {
     });
 });
 
+const changeStatus = catchAsync(async (req, res) => {
+    const result = await ComplaintWorkflow.changeStatus(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: `Complaint status changed to ${result.status}`,
+        data: result,
+    });
+});
+
 export const ComplaintController = {
     createComplaint,
     getComplaints,
@@ -87,4 +98,5 @@ export const ComplaintController = {
     updateComplaint,
     deleteComplaint,
     assignComplaint,
+    changeStatus,
 };

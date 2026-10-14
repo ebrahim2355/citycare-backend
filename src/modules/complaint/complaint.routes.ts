@@ -25,5 +25,11 @@ router.post(
     validateRequest(ComplaintValidation.assignComplaintSchema),
     ComplaintController.assignComplaint
 );
+router.patch(
+    "/:id/status",
+    auth(Role.STAFF, Role.ADMIN),
+    validateRequest(ComplaintValidation.changeStatusSchema),
+    ComplaintController.changeStatus
+);
 
 export const ComplaintRoutes = router;
