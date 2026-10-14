@@ -18,6 +18,40 @@ const createComplaint = catchAsync(async (req, res) => {
     });
 });
 
+const getComplaints = catchAsync(async (req, res) => {
+    const result = await ComplaintService.getComplaints(currentUser(req), res.locals.query);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Complaints retrieved successfully",
+        meta: result.meta,
+        data: result.data,
+    });
+});
+
+const getComplaintById = catchAsync(async (req, res) => {
+    const result = await ComplaintService.getComplaintById(currentUser(req), req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Complaint retrieved successfully",
+        data: result,
+    });
+});
+
+const trackComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintService.trackComplaint(req.params.trackingCode as string);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Tracking details retrieved successfully",
+        data: result,
+    });
+});
+
 export const ComplaintController = {
     createComplaint,
+    getComplaints,
+    getComplaintById,
+    trackComplaint,
 };

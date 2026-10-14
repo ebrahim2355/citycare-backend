@@ -1,19 +1,34 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import { CategoryType, ComplaintPaymentStatus, ComplaintStatus, Prisma } from "../../generated/prisma/client";
+import { CategoryType, ComplaintPaymentStatus, ComplaintStatus, Prisma, Role } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
+import { getMeta, getPagination } from "../../utils/pagination";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
-import { complaintDetailSelect } from "./complaint.constant";
+import { complaintDetailSelect, complaintListSelect, OPEN_STATUSES } from "./complaint.constant";
 import { addHours, generateTrackingCode, withOverdue } from "./complaint.utils";
-import type { TCreateComplaintPayload } from "./complaint.validation";
+import type { TComplaintQuery, TCreateComplaintPayload } from "./complaint.validation";
 
 const MAX_CODE_ATTEMPTS = 3;
 
 const isUniqueViolation = (error: unknown) => {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+};
+
+const ensureCanView = (user: IAuthUser, complaint: { citizen: { id: string }; assignedStaff: { id: string } | null }) => {
+    if (user.role === Role.ADMIN) {
+        return;
+    }
+
+    if (user.role === Role.CITIZEN && complaint.citizen.id !== user.id) {
+        throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only open your own complaints");
+    }
+
+    if (user.role === Role.STAFF && complaint.assignedStaff?.id !== user.id) {
+        throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only open complaints that are assigned to you");
+    }
 };
 
 const createComplaint = async (user: IAuthUser, payload: TCreateComplaintPayload, context: IRequestContext) => {
@@ -87,6 +102,158 @@ const createComplaint = async (user: IAuthUser, payload: TCreateComplaintPayload
     throw new AppError(StatusCodes.INTERNAL_SERVER_ERROR, "Could not create the complaint", "Please try again");
 };
 
+const buildComplaintFilters = (user: IAuthUser, query: TComplaintQuery): Prisma.ComplaintWhereInput => {
+    const where: Prisma.ComplaintWhereInput = { deletedAt: null };
+    const conditions: Prisma.ComplaintWhereInput[] = [];
+
+    if (user.role === Role.CITIZEN) {
+        where.citizenId = user.id;
+    } else if (user.role === Role.STAFF) {
+        where.assignedStaffId = user.id;
+    } else {
+        if (query.citizenId) {
+            where.citizenId = query.citizenId;
+        }
+
+        if (query.assignedStaffId) {
+            where.assignedStaffId = query.assignedStaffId;
+        }
+
+        if (query.unassigned === "true") {
+            where.assignedStaffId = null;
+        }
+    }
+
+    if (query.status) {
+        where.status = query.status;
+    }
+
+    if (query.priority) {
+        where.priority = query.priority;
+    }
+
+    if (query.type) {
+        where.type = query.type;
+    }
+
+    if (query.paymentStatus) {
+        where.paymentStatus = query.paymentStatus;
+    }
+
+    if (query.categoryId) {
+        where.categoryId = query.categoryId;
+    }
+
+    if (query.departmentId) {
+        where.departmentId = query.departmentId;
+    }
+
+    if (query.area) {
+        where.area = { contains: query.area, mode: "insensitive" };
+    }
+
+    if (query.from || query.to) {
+        where.createdAt = {
+            ...(query.from ? { gte: query.from } : {}),
+            ...(query.to ? { lte: query.to } : {}),
+        };
+    }
+
+    if (query.overdue) {
+        const overdueFilter: Prisma.ComplaintWhereInput = { dueAt: { lt: new Date() }, status: { in: OPEN_STATUSES } };
+
+        conditions.push(query.overdue === "true" ? overdueFilter : { NOT: overdueFilter });
+    }
+
+    if (query.searchTerm) {
+        conditions.push({
+            OR: [
+                { title: { contains: query.searchTerm, mode: "insensitive" } },
+                { description: { contains: query.searchTerm, mode: "insensitive" } },
+                { trackingCode: { contains: query.searchTerm, mode: "insensitive" } },
+                { address: { contains: query.searchTerm, mode: "insensitive" } },
+            ],
+        });
+    }
+
+    if (conditions.length) {
+        where.AND = conditions;
+    }
+
+    return where;
+};
+
+const getComplaints = async (user: IAuthUser, query: TComplaintQuery) => {
+    const { page, limit, skip, sortOrder } = getPagination(query);
+    const where = buildComplaintFilters(user, query);
+    const sortBy = query.sortBy ?? "createdAt";
+
+    const orderBy: Prisma.ComplaintOrderByWithRelationInput[] = [
+        sortBy === "dueAt" ? { dueAt: { sort: sortOrder, nulls: "last" } } : { [sortBy]: sortOrder },
+        { id: "asc" },
+    ];
+
+    const [complaints, total] = await prisma.$transaction([
+        prisma.complaint.findMany({ where, select: complaintListSelect, orderBy, skip, take: limit }),
+        prisma.complaint.count({ where }),
+    ]);
+
+    return {
+        meta: getMeta(page, limit, total),
+        data: complaints.map(withOverdue),
+    };
+};
+
+const getComplaintById = async (user: IAuthUser, id: string) => {
+    const complaint = await prisma.complaint.findFirst({
+        where: { id, deletedAt: null },
+        select: complaintDetailSelect,
+    });
+
+    if (!complaint) {
+        throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this id");
+    }
+
+    ensureCanView(user, complaint);
+
+    return withOverdue(complaint);
+};
+
+const trackComplaint = async (trackingCode: string) => {
+    const complaint = await prisma.complaint.findFirst({
+        where: { trackingCode: trackingCode.toUpperCase(), deletedAt: null },
+        select: {
+            trackingCode: true,
+            title: true,
+            type: true,
+            priority: true,
+            status: true,
+            area: true,
+            submittedAt: true,
+            dueAt: true,
+            resolvedAt: true,
+            closedAt: true,
+            createdAt: true,
+            category: { select: { name: true } },
+            department: { select: { name: true } },
+            updates: {
+                select: { fromStatus: true, toStatus: true, createdAt: true },
+                orderBy: { createdAt: "asc" },
+            },
+        },
+    });
+
+    if (!complaint) {
+        throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this tracking code");
+    }
+
+    return withOverdue(complaint);
+};
+
 export const ComplaintService = {
+    ensureCanView,
     createComplaint,
+    getComplaints,
+    getComplaintById,
+    trackComplaint,
 };

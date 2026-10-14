@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { uuidSchema } from "../../validations/common.validation";
+import { paginationFields, uuidSchema } from "../../validations/common.validation";
 
 const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+const statuses = ["PENDING_PAYMENT", "SUBMITTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED", "REJECTED", "CANCELLED"] as const;
+const booleanText = (label: string) => z.enum(["true", "false"], `${label} must be true or false`);
 
 const complaintFields = {
     title: z
@@ -54,14 +56,58 @@ const createComplaintSchema = z.object({
         .refine(hasBothCoordinates, { path: ["longitude"], message: "Send latitude and longitude together" }),
 });
 
+const complaintQuerySchema = z.object({
+    query: z
+        .object({
+            ...paginationFields,
+            sortBy: z
+                .enum(
+                    ["createdAt", "updatedAt", "dueAt", "priority", "status"],
+                    "sortBy must be createdAt, updatedAt, dueAt, priority or status"
+                )
+                .optional(),
+            status: z.enum(statuses, "status is not valid").optional(),
+            priority: complaintFields.priority.optional(),
+            type: z.enum(["COMPLAINT", "SERVICE"], "type must be COMPLAINT or SERVICE").optional(),
+            paymentStatus: z.enum(["NOT_REQUIRED", "UNPAID", "PAID", "REFUNDED"], "paymentStatus is not valid").optional(),
+            categoryId: uuidSchema("categoryId").optional(),
+            departmentId: uuidSchema("departmentId").optional(),
+            citizenId: uuidSchema("citizenId").optional(),
+            assignedStaffId: uuidSchema("assignedStaffId").optional(),
+            unassigned: booleanText("unassigned").optional(),
+            overdue: booleanText("overdue").optional(),
+            area: z.string().trim().max(80, "area is too long").optional(),
+            searchTerm: z.string().trim().max(100, "searchTerm is too long").optional(),
+            from: z.coerce.date("from must be a valid date").optional(),
+            to: z.coerce.date("to must be a valid date").optional(),
+        })
+        .refine((query) => !query.from || !query.to || query.from <= query.to, {
+            path: ["to"],
+            message: "to must be the same as or after from",
+        }),
+});
+
+const trackingCodeSchema = z.object({
+    params: z.object({
+        trackingCode: z
+            .string()
+            .trim()
+            .regex(/^CC-\d{6}-[A-Za-z0-9]{6}$/, "Tracking code is not valid"),
+    }),
+});
+
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
+export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
 
 export const ComplaintValidation = {
     createComplaintSchema,
+    complaintQuerySchema,
+    trackingCodeSchema,
 };
 
 export const complaintValidationParts = {
     priorities,
+    statuses,
     complaintFields,
     hasBothCoordinates,
 };
