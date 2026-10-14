@@ -5,6 +5,7 @@ import { AuthRoutes } from "../modules/auth/auth.routes";
 import { CategoryRoutes } from "../modules/category/category.routes";
 import { ComplaintRoutes } from "../modules/complaint/complaint.routes";
 import { DepartmentRoutes } from "../modules/department/department.routes";
+import { PaymentRoutes } from "../modules/payment/payment.routes";
 import { UserRoutes } from "../modules/user/user.routes";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
@@ -30,6 +31,7 @@ const moduleRoutes = [
     { path: "/departments", route: DepartmentRoutes },
     { path: "/categories", route: CategoryRoutes },
     { path: "/complaints", route: ComplaintRoutes },
+    { path: "/payments", route: PaymentRoutes },
 ];
 
 for (const moduleRoute of moduleRoutes) {

@@ -16,6 +16,10 @@ const envSchema = z.object({
     MAX_ACTIVE_ASSIGNMENTS: z.coerce.number().int().positive().default(5),
     REOPEN_WINDOW_DAYS: z.coerce.number().int().positive().default(7),
     MAX_REOPENS: z.coerce.number().int().min(0).default(2),
+    STRIPE_SECRET_KEY: z.string().default(""),
+    STRIPE_WEBHOOK_SECRET: z.string().default(""),
+    PAYMENT_CURRENCY: z.string().length(3, "PAYMENT_CURRENCY must be a 3 letter code").default("usd"),
+    CLIENT_URL: z.url().optional(),
     CORS_ORIGINS: z.string().default(""),
     RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().positive().default(15),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -32,6 +36,9 @@ if (!parsed.success) {
 
 const env = parsed.data;
 const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+const cleanUrl = (url: string) => url.trim().replace(/\/$/, "");
+const clientUrl = env.CLIENT_URL ? cleanUrl(env.CLIENT_URL) : null;
+const corsOrigins = env.CORS_ORIGINS.split(",").map(cleanUrl).filter(Boolean);
 
 const config = {
     nodeEnv: env.NODE_ENV,
@@ -49,15 +56,20 @@ const config = {
         reopenWindowDays: env.REOPEN_WINDOW_DAYS,
         maxReopens: env.MAX_REOPENS,
     },
-    corsOrigins: env.CORS_ORIGINS.split(",")
-        .map((origin) => origin.trim().replace(/\/$/, ""))
-        .filter(Boolean),
+    stripe: {
+        secretKey: env.STRIPE_SECRET_KEY,
+        webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+        currency: env.PAYMENT_CURRENCY.toLowerCase(),
+    },
+    clientUrl,
+    corsOrigins,
+    clientOrigins: [...new Set([...(clientUrl ? [clientUrl] : []), ...corsOrigins])],
     rateLimit: {
         windowMinutes: env.RATE_LIMIT_WINDOW_MINUTES,
         max: env.RATE_LIMIT_MAX,
         authMax: env.AUTH_RATE_LIMIT_MAX,
     },
-    appUrl: (env.APP_URL ?? (vercelUrl ? `https://${vercelUrl}` : `http://localhost:${env.PORT}`)).replace(/\/$/, ""),
+    appUrl: cleanUrl(env.APP_URL ?? (vercelUrl ? `https://${vercelUrl}` : `http://localhost:${env.PORT}`)),
 };
 
 export default config;

@@ -47,6 +47,7 @@ model User {
   assignedComplaints Complaint[]       @relation("AssignedComplaints")
   complaintUpdates   ComplaintUpdate[]
   feedbacks          Feedback[]
+  payments           Payment[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -195,6 +196,7 @@ model Complaint {
   department    Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   updates       ComplaintUpdate[]
   feedback      Feedback?
+  payments      Payment[]
 
   @@index([citizenId, status])
   @@index([assignedStaffId, status])
@@ -237,4 +239,42 @@ model Feedback {
   @@index([citizenId])
   @@index([rating])
   @@map("feedbacks")
+}
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+model Payment {
+  id              String          @id @default(uuid())
+  complaintId     String
+  citizenId       String
+  amount          Decimal         @db.Decimal(10, 2)
+  currency        String          @default("usd")
+  provider        PaymentProvider @default(STRIPE)
+  status          PaymentStatus   @default(PENDING)
+  transactionId   String          @unique
+  paymentIntentId String?
+  refundId        String?
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Restrict)
+  citizen   User      @relation(fields: [citizenId], references: [id], onDelete: Restrict)
+
+  @@index([complaintId, status])
+  @@index([citizenId, status])
+  @@index([paymentIntentId])
+  @@index([createdAt])
+  @@map("payments")
 }

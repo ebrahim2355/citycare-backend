@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import Stripe from "stripe";
 import { ZodError } from "zod";
 import config from "../config";
 import AppError, { type IErrorItem } from "../errors/AppError";
@@ -54,6 +55,22 @@ const handlePrismaError = (error: Prisma.PrismaClientKnownRequestError): IErrorR
     };
 };
 
+const handleStripeError = (error: Stripe.errors.StripeError): IErrorResponse => {
+    let statusCode: number = StatusCodes.BAD_GATEWAY;
+
+    if (error.type === "StripeCardError") {
+        statusCode = StatusCodes.PAYMENT_REQUIRED;
+    } else if (error.type === "StripeInvalidRequestError") {
+        statusCode = StatusCodes.BAD_REQUEST;
+    }
+
+    return {
+        statusCode,
+        message: "Payment provider error",
+        errors: [{ message: error.message }],
+    };
+};
+
 const globalErrorHandler = (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     let response: IErrorResponse = {
         statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
@@ -77,6 +94,8 @@ const globalErrorHandler = (error: unknown, _req: Request, res: Response, _next:
             message: "Invalid data",
             errors: [{ message: "The provided data does not match the expected format" }],
         };
+    } else if (error instanceof Stripe.errors.StripeError) {
+        response = handleStripeError(error);
     } else if (error instanceof SyntaxError && "status" in error && error.status === StatusCodes.BAD_REQUEST) {
         response = {
             statusCode: StatusCodes.BAD_REQUEST,
