@@ -9,8 +9,9 @@ import { comparePassword, hashPassword } from "../../utils/password";
 import type { IRequestContext } from "../../utils/requestContext";
 import { generateToken, hashToken } from "../../utils/token";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { NotificationService } from "../notification/notification.service";
 import { safeUserSelect } from "../user/user.constant";
-import type { TChangePasswordPayload, TLoginPayload, TRegisterPayload } from "./auth.validation";
+import type { TChangePasswordPayload, TLoginPayload, TRegisterPayload, TResetPasswordPayload } from "./auth.validation";
 
 interface ITokenUser {
     id: string;
@@ -171,6 +172,65 @@ const changePassword = async (userId: string, payload: TChangePasswordPayload, c
     return issueTokens(user, context);
 };
 
+const requestPasswordReset = async (email: string) => {
+    const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, name: true, email: true, status: true, deletedAt: true },
+    });
+
+    if (!user || user.deletedAt || user.status === UserStatus.BLOCKED) {
+        return { resetToken: null };
+    }
+
+    const token = generateToken(32);
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            resetTokenHash: hashToken(token),
+            resetTokenExpiresAt: new Date(Date.now() + config.resetTokenMinutes * 60 * 1000),
+        },
+    });
+
+    const sent = await NotificationService.passwordReset(user, token);
+
+    return { resetToken: !sent && !config.isProduction ? token : null };
+};
+
+const resetPassword = async (payload: TResetPasswordPayload, context: IRequestContext) => {
+    const user = await prisma.user.findUnique({
+        where: { resetTokenHash: hashToken(payload.token) },
+        select: { id: true, status: true, deletedAt: true, resetTokenExpiresAt: true },
+    });
+
+    if (!user || user.deletedAt || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < new Date()) {
+        throw new AppError(StatusCodes.BAD_REQUEST, "Reset token is not valid", [
+            { field: "token", message: "The reset token is invalid or expired. Request a new one." },
+        ]);
+    }
+
+    if (user.status === UserStatus.BLOCKED) {
+        throw new AppError(StatusCodes.FORBIDDEN, "Your account is blocked", "Please contact the city admin");
+    }
+
+    const password = await hashPassword(payload.newPassword);
+
+    await prisma.$transaction([
+        prisma.user.update({
+            where: { id: user.id },
+            data: { password, resetTokenHash: null, resetTokenExpiresAt: null },
+        }),
+        prisma.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+        recordAudit(prisma, {
+            actorId: user.id,
+            action: AuditAction.PASSWORD_RESET,
+            entityType: AuditEntity.USER,
+            entityId: user.id,
+            ipAddress: context.ipAddress,
+        }),
+    ]);
+};
+
 export const AuthService = {
     issueTokens,
     registerUser,
@@ -178,4 +238,6 @@ export const AuthService = {
     refreshAccessToken,
     logoutUser,
     changePassword,
+    requestPasswordReset,
+    resetPassword,
 };

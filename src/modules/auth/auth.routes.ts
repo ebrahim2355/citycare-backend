@@ -12,6 +12,8 @@ router.post("/login", authLimiter, validateRequest(AuthValidation.loginSchema), 
 router.post("/refresh-token", authLimiter, validateRequest(AuthValidation.refreshTokenSchema), AuthController.refreshToken);
 router.post("/logout", validateRequest(AuthValidation.refreshTokenSchema), AuthController.logout);
 router.post("/change-password", auth(), validateRequest(AuthValidation.changePasswordSchema), AuthController.changePassword);
+router.post("/forgot-password", authLimiter, validateRequest(AuthValidation.forgotPasswordSchema), AuthController.forgotPassword);
+router.post("/reset-password", authLimiter, validateRequest(AuthValidation.resetPasswordSchema), AuthController.resetPassword);
 router.get("/google", authLimiter, validateRequest(AuthValidation.googleStartSchema), AuthController.googleLogin);
 router.get("/google/callback", authLimiter, validateRequest(AuthValidation.googleCallbackSchema), AuthController.googleCallback);
 router.post("/google", authLimiter, validateRequest(AuthValidation.googleTokenSchema), AuthController.googleTokenLogin);

@@ -24,21 +24,23 @@ enum AuthProvider {
 }
 
 model User {
-  id           String       @id @default(uuid())
-  name         String
-  email        String       @unique
-  password     String?
-  role         Role         @default(CITIZEN)
-  status       UserStatus   @default(ACTIVE)
-  provider     AuthProvider @default(LOCAL)
-  googleId     String?      @unique
-  phone        String?
-  address      String?
-  avatarUrl    String?
-  departmentId String?
-  deletedAt    DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id                  String       @id @default(uuid())
+  name                String
+  email               String       @unique
+  password            String?
+  role                Role         @default(CITIZEN)
+  status              UserStatus   @default(ACTIVE)
+  provider            AuthProvider @default(LOCAL)
+  googleId            String?      @unique
+  phone               String?
+  address             String?
+  avatarUrl           String?
+  departmentId        String?
+  resetTokenHash      String?      @unique
+  resetTokenExpiresAt DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   department         Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   refreshTokens      RefreshToken[]

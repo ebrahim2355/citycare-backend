@@ -3,11 +3,14 @@ import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
+import { NotificationService } from "../notification/notification.service";
 import { GoogleAuthService } from "./auth.google";
 import { AuthService } from "./auth.service";
 
 const register = catchAsync(async (req, res) => {
     const result = await AuthService.registerUser(req.body, getRequestContext(req));
+
+    await NotificationService.welcome(result.user);
 
     sendResponse(res, {
         statusCode: StatusCodes.CREATED,
@@ -52,6 +55,25 @@ const changePassword = catchAsync(async (req, res) => {
         statusCode: StatusCodes.OK,
         message: "Password changed successfully",
         data: result,
+    });
+});
+
+const forgotPassword = catchAsync(async (req, res) => {
+    const result = await AuthService.requestPasswordReset(req.body.email);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "If an account exists for this email, a password reset email was sent",
+        data: result.resetToken ? { resetToken: result.resetToken } : null,
+    });
+});
+
+const resetPassword = catchAsync(async (req, res) => {
+    await AuthService.resetPassword(req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Password reset successfully. Login with your new password.",
     });
 });
 
@@ -111,6 +133,8 @@ export const AuthController = {
     refreshToken,
     logout,
     changePassword,
+    forgotPassword,
+    resetPassword,
     googleLogin,
     googleCallback,
     googleTokenLogin,

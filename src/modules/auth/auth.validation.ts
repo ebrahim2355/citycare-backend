@@ -79,6 +79,20 @@ const googleExchangeSchema = z.object({
     }),
 });
 
+const forgotPasswordSchema = z.object({
+    body: z.object({
+        email: emailSchema,
+    }),
+});
+
+const resetPasswordSchema = z.object({
+    body: z.object({
+        token: z.string("token is required").trim().min(20, "token is not valid"),
+        newPassword: passwordSchema,
+    }),
+});
+
+export type TResetPasswordPayload = z.infer<typeof resetPasswordSchema>["body"];
 export type TRegisterPayload = z.infer<typeof registerSchema>["body"];
 export type TLoginPayload = z.infer<typeof loginSchema>["body"];
 export type TChangePasswordPayload = z.infer<typeof changePasswordSchema>["body"];
@@ -91,6 +105,8 @@ export const AuthValidation = {
     loginSchema,
     refreshTokenSchema,
     changePasswordSchema,
+    forgotPasswordSchema,
+    resetPasswordSchema,
     googleStartSchema,
     googleCallbackSchema,
     googleTokenSchema,
