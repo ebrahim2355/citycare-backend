@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
+import { DocsRoutes } from "../docs/docs.routes";
 import prisma from "../lib/prisma";
 import { getRedisStatus } from "../lib/redis";
 import { AdminRoutes } from "../modules/admin/admin.routes";
@@ -37,6 +38,7 @@ const moduleRoutes = [
     { path: "/payments", route: PaymentRoutes },
     { path: "/stats", route: StatsRoutes },
     { path: "/admin", route: AdminRoutes },
+    { path: "/docs", route: DocsRoutes },
 ];
 
 for (const moduleRoute of moduleRoutes) {
