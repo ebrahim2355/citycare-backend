@@ -25,6 +25,8 @@ const envSchema = z.object({
     SMTP_HOST: z.string().default(""),
     SMTP_PORT: z.coerce.number().int().positive().default(587),
     RESET_TOKEN_MINUTES: z.coerce.number().int().positive().default(30),
+    ADMIN_EMAIL: z.email().default("admin@citycare.com"),
+    ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters").default("Admin12345"),
     CLOUDINARY_URL: z.string().default(""),
     CLOUDINARY_CLOUD_NAME: z.string().default(""),
     CLOUDINARY_API_KEY: z.string().default(""),
@@ -84,6 +86,10 @@ const config = {
         smtpPort: env.SMTP_PORT,
     },
     resetTokenMinutes: env.RESET_TOKEN_MINUTES,
+    admin: {
+        email: env.ADMIN_EMAIL.toLowerCase(),
+        password: env.ADMIN_PASSWORD,
+    },
     cloudinary: {
         url: env.CLOUDINARY_URL,
         cloudName: env.CLOUDINARY_CLOUD_NAME,

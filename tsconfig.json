@@ -1,6 +1,5 @@
 {
     "compilerOptions": {
-        "rootDir": "./src",
         "target": "es2023",
         "lib": ["es2023"],
         "module": "esnext",
@@ -13,5 +12,5 @@
         "skipLibCheck": true,
         "noEmit": true
     },
-    "include": ["src"]
+    "include": ["src", "prisma", "*.ts"]
 }
