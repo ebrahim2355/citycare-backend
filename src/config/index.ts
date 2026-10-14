@@ -16,6 +16,7 @@ const envSchema = z.object({
     MAX_ACTIVE_ASSIGNMENTS: z.coerce.number().int().positive().default(5),
     REOPEN_WINDOW_DAYS: z.coerce.number().int().positive().default(7),
     MAX_REOPENS: z.coerce.number().int().min(0).default(2),
+    REDIS_URL: z.string().default(""),
     STRIPE_SECRET_KEY: z.string().default(""),
     STRIPE_WEBHOOK_SECRET: z.string().default(""),
     PAYMENT_CURRENCY: z.string().length(3, "PAYMENT_CURRENCY must be a 3 letter code").default("usd"),
@@ -45,6 +46,7 @@ const config = {
     isProduction: env.NODE_ENV === "production",
     port: env.PORT,
     databaseUrl: env.DATABASE_URL,
+    redisUrl: env.REDIS_URL,
     jwt: {
         accessSecret: env.JWT_ACCESS_SECRET,
         accessExpiresIn: env.JWT_ACCESS_EXPIRES_IN,

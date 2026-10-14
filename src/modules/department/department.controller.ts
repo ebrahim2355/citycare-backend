@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { currentUser } from "../../middlewares/auth";
+import { setCacheHeader } from "../../utils/cache";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
@@ -8,10 +9,12 @@ import { DepartmentService } from "./department.service";
 const getAllDepartments = catchAsync(async (_req, res) => {
     const result = await DepartmentService.getAllDepartments();
 
+    setCacheHeader(res, result.cached);
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: "Departments retrieved successfully",
-        data: result,
+        data: result.data,
     });
 });
 

@@ -24,6 +24,7 @@ app.use(
             callback(null, false);
         },
         credentials: true,
+        exposedHeaders: ["X-Cache", "RateLimit", "RateLimit-Policy", "Retry-After"],
     })
 );
 app.use(express.json({ limit: "1mb", verify: saveRawBody }));

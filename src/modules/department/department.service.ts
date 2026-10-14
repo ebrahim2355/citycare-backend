@@ -3,6 +3,7 @@ import AppError from "../../errors/AppError";
 import { ComplaintStatus, Role } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import { recordAudit } from "../../utils/auditLog";
+import { CATALOG_CACHE_SECONDS, cacheKeys, invalidateCatalogCache, remember } from "../../utils/cache";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { OPEN_STATUSES } from "../complaint/complaint.constant";
@@ -44,13 +45,15 @@ const findDepartmentOrThrow = async (id: string) => {
 };
 
 const getAllDepartments = async () => {
-    return prisma.department.findMany({
-        where: { deletedAt: null },
-        select: {
-            ...departmentSelect,
-            _count: { select: { categories: { where: { deletedAt: null, isActive: true } } } },
-        },
-        orderBy: { name: "asc" },
+    return remember(cacheKeys.departments, CATALOG_CACHE_SECONDS, () => {
+        return prisma.department.findMany({
+            where: { deletedAt: null },
+            select: {
+                ...departmentSelect,
+                _count: { select: { categories: { where: { deletedAt: null, isActive: true } } } },
+            },
+            orderBy: { name: "asc" },
+        });
     });
 };
 
@@ -77,7 +80,7 @@ const getDepartmentById = async (id: string) => {
 const createDepartment = async (actorId: string, payload: TCreateDepartmentPayload, context: IRequestContext) => {
     await ensureNameIsFree(payload.name);
 
-    return prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
         const department = await tx.department.create({ data: payload, select: departmentSelect });
 
         await recordAudit(tx, {
@@ -91,6 +94,10 @@ const createDepartment = async (actorId: string, payload: TCreateDepartmentPaylo
 
         return department;
     });
+
+    await invalidateCatalogCache();
+
+    return created;
 };
 
 const updateDepartment = async (actorId: string, id: string, payload: TUpdateDepartmentPayload, context: IRequestContext) => {
@@ -100,7 +107,7 @@ const updateDepartment = async (actorId: string, id: string, payload: TUpdateDep
         await ensureNameIsFree(payload.name, id);
     }
 
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
         const department = await tx.department.update({ where: { id }, data: payload, select: departmentSelect });
 
         await recordAudit(tx, {
@@ -114,6 +121,10 @@ const updateDepartment = async (actorId: string, id: string, payload: TUpdateDep
 
         return department;
     });
+
+    await invalidateCatalogCache();
+
+    return updated;
 };
 
 const deleteDepartment = async (actorId: string, id: string, context: IRequestContext) => {
@@ -147,6 +158,8 @@ const deleteDepartment = async (actorId: string, id: string, context: IRequestCo
             ipAddress: context.ipAddress,
         });
     });
+
+    await invalidateCatalogCache();
 };
 
 export const DepartmentService = {

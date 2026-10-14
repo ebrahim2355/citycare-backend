@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { currentUser } from "../../middlewares/auth";
+import { setCacheHeader } from "../../utils/cache";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
@@ -8,10 +9,12 @@ import { CategoryService } from "./category.service";
 const getAllCategories = catchAsync(async (req, res) => {
     const result = await CategoryService.getAllCategories(res.locals.query, req.user);
 
+    setCacheHeader(res, result.cached);
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: "Categories retrieved successfully",
-        data: result,
+        data: result.data,
     });
 });
 

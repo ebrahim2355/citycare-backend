@@ -4,6 +4,7 @@ import { CategoryType, ComplaintStatus, type Prisma, Role } from "../../generate
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
+import { CATALOG_CACHE_SECONDS, cacheKeys, invalidateCatalogCache, remember } from "../../utils/cache";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { OPEN_STATUSES } from "../complaint/complaint.constant";
@@ -77,7 +78,15 @@ const getAllCategories = async (query: TCategoryQuery, viewer?: IAuthUser) => {
             : {}),
     };
 
-    return prisma.category.findMany({ where, select: categorySelect, orderBy: [{ type: "asc" }, { name: "asc" }] });
+    const loadCategories = () => {
+        return prisma.category.findMany({ where, select: categorySelect, orderBy: [{ type: "asc" }, { name: "asc" }] });
+    };
+
+    if (canSeeInactive || query.searchTerm) {
+        return { data: await loadCategories(), cached: false };
+    }
+
+    return remember(cacheKeys.categories(query.type, query.departmentId), CATALOG_CACHE_SECONDS, loadCategories);
 };
 
 const getCategoryById = async (id: string) => {
@@ -94,7 +103,7 @@ const createCategory = async (actorId: string, payload: TCreateCategoryPayload, 
     await ensureNameIsFree(payload.name);
     await ensureDepartmentExists(payload.departmentId);
 
-    return prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
         const category = await tx.category.create({ data: payload, select: categorySelect });
 
         await recordAudit(tx, {
@@ -108,6 +117,10 @@ const createCategory = async (actorId: string, payload: TCreateCategoryPayload, 
 
         return category;
     });
+
+    await invalidateCatalogCache();
+
+    return created;
 };
 
 const updateCategory = async (actorId: string, id: string, payload: TUpdateCategoryPayload, context: IRequestContext) => {
@@ -130,7 +143,7 @@ const updateCategory = async (actorId: string, id: string, payload: TUpdateCateg
         ]);
     }
 
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
         const category = await tx.category.update({ where: { id }, data: payload, select: categorySelect });
 
         await recordAudit(tx, {
@@ -144,6 +157,10 @@ const updateCategory = async (actorId: string, id: string, payload: TUpdateCateg
 
         return category;
     });
+
+    await invalidateCatalogCache();
+
+    return updated;
 };
 
 const deleteCategory = async (actorId: string, id: string, context: IRequestContext) => {
@@ -173,6 +190,8 @@ const deleteCategory = async (actorId: string, id: string, context: IRequestCont
             ipAddress: context.ipAddress,
         });
     });
+
+    await invalidateCatalogCache();
 };
 
 export const CategoryService = {
