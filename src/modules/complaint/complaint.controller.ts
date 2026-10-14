@@ -90,6 +90,36 @@ const changeStatus = catchAsync(async (req, res) => {
     });
 });
 
+const cancelComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintWorkflow.cancelComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Complaint cancelled successfully",
+        data: result,
+    });
+});
+
+const reopenComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintWorkflow.reopenComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Complaint reopened successfully",
+        data: result,
+    });
+});
+
+const transferComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintWorkflow.transferComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: `Complaint transferred to ${result.department.name}`,
+        data: result,
+    });
+});
+
 export const ComplaintController = {
     createComplaint,
     getComplaints,
@@ -99,4 +129,7 @@ export const ComplaintController = {
     deleteComplaint,
     assignComplaint,
     changeStatus,
+    cancelComplaint,
+    reopenComplaint,
+    transferComplaint,
 };

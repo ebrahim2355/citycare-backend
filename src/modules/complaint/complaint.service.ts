@@ -14,7 +14,7 @@ import {
     complaintListSelect,
     OPEN_STATUSES,
 } from "./complaint.constant";
-import { addHours, generateTrackingCode, withOverdue } from "./complaint.utils";
+import { addHours, generateTrackingCode, getComplaintDetail, withOverdue } from "./complaint.utils";
 import type { TComplaintQuery, TCreateComplaintPayload, TUpdateComplaintPayload } from "./complaint.validation";
 
 const MAX_CODE_ATTEMPTS = 3;
@@ -296,8 +296,8 @@ const updateComplaint = async (user: IAuthUser, id: string, payload: TUpdateComp
 
     const priorityChanged = payload.priority !== undefined && payload.priority !== complaint.priority;
 
-    const updated = await prisma.$transaction(async (tx) => {
-        const result = await tx.complaint.update({ where: { id }, data: payload, select: complaintDetailSelect });
+    return prisma.$transaction(async (tx) => {
+        await tx.complaint.update({ where: { id }, data: payload });
 
         if (priorityChanged) {
             await tx.complaintUpdate.create({
@@ -320,10 +320,8 @@ const updateComplaint = async (user: IAuthUser, id: string, payload: TUpdateComp
             ipAddress: context.ipAddress,
         });
 
-        return result;
+        return getComplaintDetail(tx, id);
     });
-
-    return withOverdue(updated);
 };
 
 const deleteComplaint = async (user: IAuthUser, id: string, context: IRequestContext) => {

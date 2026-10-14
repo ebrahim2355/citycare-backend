@@ -92,7 +92,7 @@ const trackingCodeSchema = z.object({
         trackingCode: z
             .string()
             .trim()
-            .regex(/^CC-\d{6}-[A-Za-z0-9]{6}$/, "Tracking code is not valid"),
+            .regex(/^CC-\d{6}-[A-Z0-9]{6}$/i, "Tracking code is not valid"),
     }),
 });
 
@@ -143,11 +143,50 @@ const changeStatusSchema = z.object({
         }),
 });
 
+const cancelComplaintSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z.object({
+        reason: z
+            .string()
+            .trim()
+            .min(5, "reason must be at least 5 characters")
+            .max(300, "reason cannot be longer than 300 characters")
+            .optional(),
+    }),
+});
+
+const reopenComplaintSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z.object({
+        reason: z
+            .string("reason is required")
+            .trim()
+            .min(10, "reason must be at least 10 characters")
+            .max(500, "reason cannot be longer than 500 characters"),
+    }),
+});
+
+const transferComplaintSchema = z.object({
+    params: z.object({ id: uuidSchema() }),
+    body: z.object({
+        departmentId: uuidSchema("departmentId"),
+        note: z
+            .string()
+            .trim()
+            .min(3, "note must be at least 3 characters")
+            .max(300, "note cannot be longer than 300 characters")
+            .optional(),
+    }),
+});
+
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
 export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
 export type TUpdateComplaintPayload = z.infer<typeof updateComplaintSchema>["body"];
 export type TAssignComplaintPayload = z.infer<typeof assignComplaintSchema>["body"];
 export type TChangeStatusPayload = z.infer<typeof changeStatusSchema>["body"];
+export type TCancelComplaintPayload = z.infer<typeof cancelComplaintSchema>["body"];
+export type TReopenComplaintPayload = z.infer<typeof reopenComplaintSchema>["body"];
+export type TTransferComplaintPayload = z.infer<typeof transferComplaintSchema>["body"];
 
 export const ComplaintValidation = {
     createComplaintSchema,
@@ -156,6 +195,9 @@ export const ComplaintValidation = {
     updateComplaintSchema,
     assignComplaintSchema,
     changeStatusSchema,
+    cancelComplaintSchema,
+    reopenComplaintSchema,
+    transferComplaintSchema,
 };
 
 export const complaintValidationParts = {

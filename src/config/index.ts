@@ -14,6 +14,8 @@ const envSchema = z.object({
     REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
     BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(10),
     MAX_ACTIVE_ASSIGNMENTS: z.coerce.number().int().positive().default(5),
+    REOPEN_WINDOW_DAYS: z.coerce.number().int().positive().default(7),
+    MAX_REOPENS: z.coerce.number().int().min(0).default(2),
     CORS_ORIGINS: z.string().default(""),
     RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().positive().default(15),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -44,6 +46,8 @@ const config = {
     saltRounds: env.BCRYPT_SALT_ROUNDS,
     complaint: {
         maxActiveAssignments: env.MAX_ACTIVE_ASSIGNMENTS,
+        reopenWindowDays: env.REOPEN_WINDOW_DAYS,
+        maxReopens: env.MAX_REOPENS,
     },
     corsOrigins: env.CORS_ORIGINS.split(",")
         .map((origin) => origin.trim().replace(/\/$/, ""))

@@ -31,5 +31,23 @@ router.patch(
     validateRequest(ComplaintValidation.changeStatusSchema),
     ComplaintController.changeStatus
 );
+router.post(
+    "/:id/cancel",
+    auth(Role.CITIZEN),
+    validateRequest(ComplaintValidation.cancelComplaintSchema),
+    ComplaintController.cancelComplaint
+);
+router.post(
+    "/:id/reopen",
+    auth(Role.CITIZEN),
+    validateRequest(ComplaintValidation.reopenComplaintSchema),
+    ComplaintController.reopenComplaint
+);
+router.post(
+    "/:id/transfer",
+    auth(Role.ADMIN),
+    validateRequest(ComplaintValidation.transferComplaintSchema),
+    ComplaintController.transferComplaint
+);
 
 export const ComplaintRoutes = router;
