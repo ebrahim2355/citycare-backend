@@ -35,19 +35,24 @@ export interface ILockedComplaint {
     departmentId: string;
     categoryId: string;
     assignedStaffId: string | null;
+    deletedAt: Date | null;
 }
 
-export const lockComplaint = async (tx: Prisma.TransactionClient, id: string): Promise<ILockedComplaint> => {
+export const lockComplaint = async (
+    tx: Prisma.TransactionClient,
+    id: string,
+    options: { includeDeleted?: boolean } = {}
+): Promise<ILockedComplaint> => {
     const rows = await tx.$queryRaw<ILockedComplaint[]>`
-        SELECT "id", "trackingCode", "status", "citizenId", "departmentId", "categoryId", "assignedStaffId"
+        SELECT "id", "trackingCode", "status", "citizenId", "departmentId", "categoryId", "assignedStaffId", "deletedAt"
         FROM "complaints"
-        WHERE "id" = ${id} AND "deletedAt" IS NULL
+        WHERE "id" = ${id}
         FOR UPDATE
     `;
 
     const complaint = rows[0];
 
-    if (!complaint) {
+    if (!complaint || (complaint.deletedAt && !options.includeDeleted)) {
         throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this id");
     }
 

@@ -1,0 +1,220 @@
+import { StatusCodes } from "http-status-codes";
+import type Stripe from "stripe";
+import config from "../../config";
+import AppError from "../../errors/AppError";
+import { ComplaintPaymentStatus, ComplaintStatus, PaymentStatus } from "../../generated/prisma/client";
+import prisma from "../../lib/prisma";
+import getStripe from "../../lib/stripe";
+import type { IAuthUser } from "../../middlewares/auth";
+import { recordAudit } from "../../utils/auditLog";
+import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { addHours, lockComplaint } from "../complaint/complaint.utils";
+import { PaymentCheckout } from "./payment.checkout";
+import { paymentSelect } from "./payment.constant";
+
+type TSettleSource = "webhook" | "callback" | "verify";
+
+const getPaymentIntentId = (session: Stripe.Checkout.Session) => {
+    return typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent?.id ?? null);
+};
+
+const findPaymentBySession = async (sessionId: string) => {
+    const payment = await prisma.payment.findUnique({
+        where: { transactionId: sessionId },
+        select: { id: true, complaintId: true, citizenId: true, status: true },
+    });
+
+    if (!payment) {
+        throw new AppError(StatusCodes.NOT_FOUND, "Payment not found", "No payment found for this checkout session");
+    }
+
+    return payment;
+};
+
+const getPayment = (id: string) => prisma.payment.findUniqueOrThrow({ where: { id }, select: paymentSelect });
+
+const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSettleSource) => {
+    const payment = await prisma.payment.findUnique({
+        where: { transactionId: session.id },
+        select: { id: true, complaintId: true, citizenId: true },
+    });
+
+    if (!payment) {
+        return null;
+    }
+
+    await prisma.$transaction(async (tx) => {
+        const complaint = await lockComplaint(tx, payment.complaintId, { includeDeleted: true });
+
+        const settled = await tx.payment.updateMany({
+            where: { id: payment.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED] } },
+            data: { status: PaymentStatus.COMPLETED, paidAt: new Date(), paymentIntentId: getPaymentIntentId(session) },
+        });
+
+        if (settled.count === 0) {
+            return;
+        }
+
+        const canSubmit = complaint.status === ComplaintStatus.PENDING_PAYMENT && !complaint.deletedAt;
+
+        if (canSubmit) {
+            const category = await tx.category.findUniqueOrThrow({ where: { id: complaint.categoryId }, select: { slaHours: true } });
+            const now = new Date();
+
+            await tx.complaint.update({
+                where: { id: complaint.id },
+                data: {
+                    status: ComplaintStatus.SUBMITTED,
+                    paymentStatus: ComplaintPaymentStatus.PAID,
+                    submittedAt: now,
+                    dueAt: addHours(now, category.slaHours),
+                },
+            });
+
+            await tx.complaintUpdate.create({
+                data: {
+                    complaintId: complaint.id,
+                    actorId: payment.citizenId,
+                    fromStatus: ComplaintStatus.PENDING_PAYMENT,
+                    toStatus: ComplaintStatus.SUBMITTED,
+                    note: "Service fee paid. Request submitted.",
+                },
+            });
+        } else {
+            await tx.complaint.update({ where: { id: complaint.id }, data: { paymentStatus: ComplaintPaymentStatus.PAID } });
+        }
+
+        await recordAudit(tx, {
+            actorId: payment.citizenId,
+            action: AuditAction.PAYMENT_COMPLETED,
+            entityType: AuditEntity.PAYMENT,
+            entityId: payment.id,
+            metadata: { complaintId: complaint.id, source, sessionId: session.id, complaintStatus: complaint.status },
+        });
+    });
+
+    return getPayment(payment.id);
+};
+
+const closeUnpaidSession = async (sessionId: string, status: "CANCELLED" | "FAILED") => {
+    const payment = await prisma.payment.findUnique({ where: { transactionId: sessionId }, select: { id: true, citizenId: true } });
+
+    if (!payment) {
+        return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+        const closed = await tx.payment.updateMany({ where: { id: payment.id, status: PaymentStatus.PENDING }, data: { status } });
+
+        if (closed.count === 0) {
+            return;
+        }
+
+        await recordAudit(tx, {
+            actorId: payment.citizenId,
+            action: AuditAction.PAYMENT_FAILED,
+            entityType: AuditEntity.PAYMENT,
+            entityId: payment.id,
+            metadata: { sessionId, status },
+        });
+    });
+};
+
+const handleWebhook = async (rawBody: Buffer | undefined, signature: string | undefined) => {
+    if (!config.stripe.webhookSecret) {
+        throw new AppError(StatusCodes.SERVICE_UNAVAILABLE, "Webhook is not configured", "STRIPE_WEBHOOK_SECRET is missing on the server");
+    }
+
+    if (!rawBody || !signature) {
+        throw new AppError(StatusCodes.BAD_REQUEST, "Invalid webhook request", "The Stripe signature or the request body is missing");
+    }
+
+    let event: Stripe.Event;
+
+    try {
+        event = getStripe().webhooks.constructEvent(rawBody, signature, config.stripe.webhookSecret);
+    } catch {
+        throw new AppError(StatusCodes.BAD_REQUEST, "Invalid webhook signature", "The request was not signed by Stripe");
+    }
+
+    switch (event.type) {
+        case "checkout.session.completed":
+        case "checkout.session.async_payment_succeeded": {
+            if (event.data.object.payment_status === "paid") {
+                await settlePaidSession(event.data.object, "webhook");
+            }
+
+            break;
+        }
+        case "checkout.session.expired": {
+            await closeUnpaidSession(event.data.object.id, "CANCELLED");
+            break;
+        }
+        case "checkout.session.async_payment_failed": {
+            await closeUnpaidSession(event.data.object.id, "FAILED");
+            break;
+        }
+        default:
+            break;
+    }
+
+    return { received: true, type: event.type };
+};
+
+const verifyPayment = async (user: IAuthUser, sessionId: string) => {
+    const payment = await findPaymentBySession(sessionId);
+
+    if (payment.citizenId !== user.id) {
+        throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only verify your own payments");
+    }
+
+    const session = await getStripe().checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status === "paid") {
+        await settlePaidSession(session, "verify");
+    }
+
+    return { paid: session.payment_status === "paid", payment: await getPayment(payment.id) };
+};
+
+const handleSuccessCallback = async (sessionId: string) => {
+    const payment = await findPaymentBySession(sessionId);
+    const session = await getStripe().checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status !== "paid") {
+        throw new AppError(StatusCodes.CONFLICT, "Payment is not completed", "Stripe has not received the payment for this checkout yet");
+    }
+
+    await settlePaidSession(session, "callback");
+
+    return getPayment(payment.id);
+};
+
+const handleCancelCallback = async (sessionId: string) => {
+    const payment = await findPaymentBySession(sessionId);
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status === "paid") {
+        await settlePaidSession(session, "callback");
+
+        return { paid: true, payment: await getPayment(payment.id) };
+    }
+
+    if (session.status === "open") {
+        await PaymentCheckout.expireSession(stripe, sessionId);
+    }
+
+    await closeUnpaidSession(sessionId, "CANCELLED");
+
+    return { paid: false, payment: await getPayment(payment.id) };
+};
+
+export const PaymentSettlement = {
+    settlePaidSession,
+    closeUnpaidSession,
+    handleWebhook,
+    verifyPayment,
+    handleSuccessCallback,
+    handleCancelCallback,
+};

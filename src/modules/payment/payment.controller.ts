@@ -4,6 +4,7 @@ import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
 import { PaymentCheckout } from "./payment.checkout";
+import { PaymentSettlement } from "./payment.settlement";
 
 const initiatePayment = catchAsync(async (req, res) => {
     const result = await PaymentCheckout.initiatePayment(currentUser(req), req.body, getRequestContext(req));
@@ -17,6 +18,51 @@ const initiatePayment = catchAsync(async (req, res) => {
     });
 });
 
+const handleWebhook = catchAsync(async (req, res) => {
+    const signature = req.headers["stripe-signature"];
+    const result = await PaymentSettlement.handleWebhook(req.rawBody, Array.isArray(signature) ? signature[0] : signature);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Webhook received",
+        data: result,
+    });
+});
+
+const verifyPayment = catchAsync(async (req, res) => {
+    const result = await PaymentSettlement.verifyPayment(currentUser(req), req.body.sessionId);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: result.paid ? "Payment verified successfully" : "Payment is not completed yet",
+        data: result,
+    });
+});
+
+const handleSuccess = catchAsync(async (_req, res) => {
+    const result = await PaymentSettlement.handleSuccessCallback(res.locals.query.session_id);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Payment successful. Your service request is submitted.",
+        data: result,
+    });
+});
+
+const handleCancel = catchAsync(async (_req, res) => {
+    const result = await PaymentSettlement.handleCancelCallback(res.locals.query.session_id);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: result.paid ? "This checkout was already paid" : "Payment cancelled. Nothing was charged and you can try again.",
+        data: result,
+    });
+});
+
 export const PaymentController = {
     initiatePayment,
+    handleWebhook,
+    verifyPayment,
+    handleSuccess,
+    handleCancel,
 };
