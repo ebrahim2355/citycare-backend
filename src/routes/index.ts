@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import prisma from "../lib/prisma";
+import { AdminRoutes } from "../modules/admin/admin.routes";
 import { AuthRoutes } from "../modules/auth/auth.routes";
 import { CategoryRoutes } from "../modules/category/category.routes";
 import { ComplaintRoutes } from "../modules/complaint/complaint.routes";
@@ -32,6 +33,7 @@ const moduleRoutes = [
     { path: "/categories", route: CategoryRoutes },
     { path: "/complaints", route: ComplaintRoutes },
     { path: "/payments", route: PaymentRoutes },
+    { path: "/admin", route: AdminRoutes },
 ];
 
 for (const moduleRoute of moduleRoutes) {
