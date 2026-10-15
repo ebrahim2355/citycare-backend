@@ -130,4 +130,22 @@ export const EmailTemplates = {
             { label: "Tracking code", value: complaint.trackingCode }
         ),
     }),
+
+    contactReceived: (name: string, subject: string) => ({
+        subject: `We got your message: ${subject}`,
+        html: layout("Thank you for contacting CityCare", [
+            `Hello ${escapeHtml(name)},`,
+            `We received your message "${escapeHtml(subject)}". A member of the city team will read it and reply to this email address.`,
+            "If you want to report a problem in your area, you can also submit a complaint from your CityCare dashboard and follow every step.",
+        ]),
+    }),
+
+    contactReply: (name: string, subject: string, reply: string) => ({
+        subject: `Re: ${subject}`,
+        html: layout("Reply from the city team", [
+            `Hello ${escapeHtml(name)},`,
+            escapeHtml(reply).replace(/\n/g, "<br />"),
+            `This is a reply to your message "${escapeHtml(subject)}".`,
+        ]),
+    }),
 };

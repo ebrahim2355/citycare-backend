@@ -45,3 +45,5 @@ const createLimiter = (name: string, limit: number) => {
 export const apiLimiter = createLimiter("api", config.rateLimit.max);
 
 export const authLimiter = createLimiter("auth", config.rateLimit.authMax);
+
+export const contactLimiter = createLimiter("contact", config.rateLimit.authMax);

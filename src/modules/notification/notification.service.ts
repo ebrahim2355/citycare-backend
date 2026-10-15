@@ -87,6 +87,14 @@ const paymentReceived = (payment: { amount: unknown; citizen: IPerson; complaint
     });
 };
 
+const contactReceived = (message: IPerson & { subject: string }) => {
+    return sendEmail({ to: message.email, ...EmailTemplates.contactReceived(message.name, message.subject) });
+};
+
+const contactReply = (message: IPerson & { subject: string }, reply: string) => {
+    return sendEmail({ to: message.email, ...EmailTemplates.contactReply(message.name, message.subject, reply) });
+};
+
 export const NotificationService = {
     welcome,
     staffAccount,
@@ -95,4 +103,6 @@ export const NotificationService = {
     complaintAssigned,
     complaintStatusChanged,
     paymentReceived,
+    contactReceived,
+    contactReply,
 };

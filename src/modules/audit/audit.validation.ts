@@ -10,7 +10,7 @@ const auditLogQuerySchema = z.object({
         .object({
             ...paginationFields,
             action: z.enum(actions, "action is not a known audit action").optional(),
-            entityType: z.enum(entities, "entityType must be USER, DEPARTMENT, CATEGORY, COMPLAINT or PAYMENT").optional(),
+            entityType: z.enum(entities, "entityType must be USER, DEPARTMENT, CATEGORY, COMPLAINT, PAYMENT or MESSAGE").optional(),
             entityId: uuidSchema("entityId").optional(),
             actorId: uuidSchema("actorId").optional(),
             from: z.coerce.date("from must be a valid date").optional(),

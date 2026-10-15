@@ -5,6 +5,8 @@ import validateRequest from "../../middlewares/validateRequest";
 import { idParamSchema } from "../../validations/common.validation";
 import { AuditController } from "../audit/audit.controller";
 import { AuditValidation } from "../audit/audit.validation";
+import { ContactController } from "../contact/contact.controller";
+import { ContactValidation } from "../contact/contact.validation";
 import { StatsController } from "../stats/stats.controller";
 import { AdminController } from "./admin.controller";
 import { AdminValidation } from "./admin.validation";
@@ -21,5 +23,8 @@ router.delete("/users/:id", validateRequest(idParamSchema), AdminController.dele
 router.get("/staff-workload", validateRequest(AdminValidation.staffQuerySchema), AdminController.getStaffWorkload);
 router.get("/dashboard-stats", StatsController.getAdminStats);
 router.get("/audit-logs", validateRequest(AuditValidation.auditLogQuerySchema), AuditController.getAuditLogs);
+router.get("/messages", validateRequest(ContactValidation.messageQuerySchema), ContactController.getMessages);
+router.post("/messages/:id/reply", validateRequest(ContactValidation.replySchema), ContactController.replyToMessage);
+router.patch("/messages/:id/status", validateRequest(ContactValidation.updateStatusSchema), ContactController.updateMessageStatus);
 
 export const AdminRoutes = router;

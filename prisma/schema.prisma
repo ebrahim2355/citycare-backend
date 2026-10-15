@@ -52,6 +52,7 @@ model User {
   feedbacks          Feedback[]
   payments           Payment[]
   attachments        ComplaintAttachment[]
+  contactReplies     ContactMessage[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -306,4 +307,40 @@ model ComplaintAttachment {
 
   @@index([complaintId, deletedAt])
   @@map("complaint_attachments")
+}
+
+enum ContactTopic {
+  GENERAL
+  COMPLAINT_HELP
+  PAYMENT
+  ACCOUNT
+  FEEDBACK
+}
+
+enum ContactStatus {
+  NEW
+  REPLIED
+  CLOSED
+}
+
+model ContactMessage {
+  id          String        @id @default(uuid())
+  name        String
+  email       String
+  topic       ContactTopic  @default(GENERAL)
+  subject     String
+  message     String
+  status      ContactStatus @default(NEW)
+  reply       String?
+  repliedAt   DateTime?
+  repliedById String?
+  ipAddress   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  repliedBy User? @relation(fields: [repliedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("contact_messages")
 }

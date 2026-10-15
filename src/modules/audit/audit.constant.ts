@@ -27,6 +27,8 @@ export const AuditAction = {
     PAYMENT_COMPLETED: "PAYMENT_COMPLETED",
     PAYMENT_FAILED: "PAYMENT_FAILED",
     PAYMENT_REFUNDED: "PAYMENT_REFUNDED",
+    MESSAGE_REPLIED: "MESSAGE_REPLIED",
+    MESSAGE_STATUS_CHANGED: "MESSAGE_STATUS_CHANGED",
 } as const;
 
 export type TAuditAction = (typeof AuditAction)[keyof typeof AuditAction];
@@ -37,6 +39,7 @@ export const AuditEntity = {
     CATEGORY: "CATEGORY",
     COMPLAINT: "COMPLAINT",
     PAYMENT: "PAYMENT",
+    MESSAGE: "MESSAGE",
 } as const;
 
 export type TAuditEntity = (typeof AuditEntity)[keyof typeof AuditEntity];
