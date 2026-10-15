@@ -456,6 +456,7 @@ The API runs on http://localhost:5000 and the docs are on http://localhost:5000/
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | For payments | Stripe test keys |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | For Google login | OAuth client from the Google Cloud console |
 | `EMAIL_USER`, `GOOGLE_APP_PASSWORD` | For emails | Gmail address and its app password |
+| `EMAIL_SKIP_DOMAINS` | No | Domains that never get an email. Set it to `citycare.com` so the demo accounts do not send mail to a real domain |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | For photo upload | Cloudinary keys |
 | `CLIENT_URL`, `CORS_ORIGINS` | No | Frontend URL and the allowed origins |
 

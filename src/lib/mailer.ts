@@ -41,10 +41,16 @@ const getTransporter = () => {
 
 export const isEmailEnabled = () => getTransporter() !== null;
 
+const isSkippedAddress = (address: string) => {
+    const domain = address.split("@")[1]?.toLowerCase() ?? "";
+
+    return config.email.skipDomains.includes(domain);
+};
+
 export const sendEmail = async (email: IEmail): Promise<boolean> => {
     const mailer = getTransporter();
 
-    if (!mailer) {
+    if (!mailer || isSkippedAddress(email.to)) {
         return false;
     }
 

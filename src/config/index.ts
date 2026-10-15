@@ -23,6 +23,7 @@ const envSchema = z.object({
     EMAIL_USER: z.string().default(""),
     GOOGLE_APP_PASSWORD: z.string().default(""),
     EMAIL_FROM: z.string().default(""),
+    EMAIL_SKIP_DOMAINS: z.string().default(""),
     SMTP_HOST: z.string().default(""),
     SMTP_PORT: z.coerce.number().int().positive().default(587),
     RESET_TOKEN_MINUTES: z.coerce.number().int().positive().default(30),
@@ -84,6 +85,9 @@ const config = {
         user: env.EMAIL_USER,
         password: env.GOOGLE_APP_PASSWORD.replace(/\s/g, ""),
         from: env.EMAIL_FROM || (env.EMAIL_USER ? `CityCare <${env.EMAIL_USER}>` : "CityCare <no-reply@citycare.local>"),
+        skipDomains: env.EMAIL_SKIP_DOMAINS.split(",")
+            .map((domain) => domain.trim().toLowerCase())
+            .filter(Boolean),
         smtpHost: env.SMTP_HOST,
         smtpPort: env.SMTP_PORT,
     },
