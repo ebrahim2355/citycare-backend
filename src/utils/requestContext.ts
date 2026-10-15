@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { getClientIp, getClientUserAgent } from "./clientIp";
 
 export interface IRequestContext {
     ipAddress?: string | undefined;
@@ -7,7 +8,7 @@ export interface IRequestContext {
 
 export const getRequestContext = (req: Request): IRequestContext => {
     return {
-        ipAddress: req.ip,
-        userAgent: req.get("user-agent")?.slice(0, 250),
+        ipAddress: getClientIp(req),
+        userAgent: getClientUserAgent(req)?.slice(0, 250),
     };
 };

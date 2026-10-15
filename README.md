@@ -459,6 +459,7 @@ The API runs on http://localhost:5000 and the docs are on http://localhost:5000/
 | `EMAIL_SKIP_DOMAINS` | No | Domains that never get an email. Set it to `citycare.com` so the demo accounts do not send mail to a real domain |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | For photo upload | Cloudinary keys |
 | `CLIENT_URL`, `CORS_ORIGINS` | No | Frontend URL and the allowed origins |
+| `INTERNAL_API_KEY` | With a frontend server | Shared with the frontend server. When a request has this key in `x-internal-key`, the API uses `x-client-ip` for the rate limit and the logs, because every request of a server side frontend comes from the same IP |
 
 The other variables in `.env.example` have good default values. A feature that has no keys answers with `503` and a clear message. The rest of the API keeps working.
 

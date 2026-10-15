@@ -1,9 +1,10 @@
 import type { Request, Response } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { StatusCodes } from "http-status-codes";
 import { type RedisReply, RedisStore } from "rate-limit-redis";
 import config from "../config";
 import getRedis from "../lib/redis";
+import { getClientIp } from "../utils/clientIp";
 
 const tooManyRequests = (_req: Request, res: Response) => {
     res.status(StatusCodes.TOO_MANY_REQUESTS).json({
@@ -36,6 +37,7 @@ const createLimiter = (name: string, limit: number) => {
         legacyHeaders: false,
         passOnStoreError: true,
         handler: tooManyRequests,
+        keyGenerator: (req) => ipKeyGenerator(getClientIp(req) ?? "unknown"),
         ...(store ? { store } : {}),
     });
 };
