@@ -3409,7 +3409,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:5000/api/v1"
+      "value": "https://citycare-backend.vercel.app/api/v1"
     },
     {
       "key": "adminToken",

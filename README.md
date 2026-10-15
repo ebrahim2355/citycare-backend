@@ -10,8 +10,9 @@ This is a backend only project. There is no frontend. All features work from Pos
 
 | Item | Link |
 | --- | --- |
-| Live API | Add the Vercel link here after the deploy |
-| API Docs (Swagger) | `/api/v1/docs` on the live API |
+| Live API | https://citycare-backend.vercel.app |
+| API Docs (Swagger) | https://citycare-backend.vercel.app/api/v1/docs |
+| Health Check | https://citycare-backend.vercel.app/api/v1/health |
 | Postman Collection | [postman/CityCare.postman_collection.json](./postman/CityCare.postman_collection.json) |
 
 ## Demo Credentials
@@ -415,7 +416,7 @@ The API has 56 endpoints.
 You need Bun, Node.js 24 and a PostgreSQL database. Redis is optional.
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/ebrahim2355/citycare-backend.git
 cd citycare-backend
 bun install
 ```
