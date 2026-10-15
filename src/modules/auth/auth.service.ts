@@ -100,13 +100,8 @@ const refreshAccessToken = async (refreshToken: string, context: IRequestContext
         throw new AppError(StatusCodes.UNAUTHORIZED, "Invalid refresh token", "Please login again");
     }
 
-    if (storedToken.revokedAt) {
-        if (Date.now() - storedToken.revokedAt.getTime() > REUSE_GRACE_MS) {
-            await prisma.refreshToken.updateMany({
-                where: { userId: storedToken.userId, revokedAt: null },
-                data: { revokedAt: new Date() },
-            });
-        }
+    if (storedToken.revokedAt && Date.now() - storedToken.revokedAt.getTime() > REUSE_GRACE_MS) {
+        await prisma.refreshToken.deleteMany({ where: { userId: storedToken.userId } });
 
         throw new AppError(StatusCodes.UNAUTHORIZED, "Refresh token was already used", "Please login again");
     }
@@ -123,23 +118,16 @@ const refreshAccessToken = async (refreshToken: string, context: IRequestContext
         throw new AppError(StatusCodes.FORBIDDEN, "Your account is blocked", "Please contact the city admin");
     }
 
-    const revoked = await prisma.refreshToken.updateMany({
+    await prisma.refreshToken.updateMany({
         where: { id: storedToken.id, revokedAt: null },
         data: { revokedAt: new Date() },
     });
-
-    if (revoked.count === 0) {
-        throw new AppError(StatusCodes.UNAUTHORIZED, "Refresh token was already used", "Please login again");
-    }
 
     return issueTokens(storedToken.user, context);
 };
 
 const logoutUser = async (refreshToken: string) => {
-    await prisma.refreshToken.updateMany({
-        where: { tokenHash: hashToken(refreshToken), revokedAt: null },
-        data: { revokedAt: new Date() },
-    });
+    await prisma.refreshToken.deleteMany({ where: { tokenHash: hashToken(refreshToken) } });
 };
 
 const changePassword = async (userId: string, payload: TChangePasswordPayload, context: IRequestContext) => {
@@ -159,7 +147,7 @@ const changePassword = async (userId: string, payload: TChangePasswordPayload, c
 
     await prisma.$transaction([
         prisma.user.update({ where: { id: userId }, data: { password } }),
-        prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+        prisma.refreshToken.deleteMany({ where: { userId } }),
         recordAudit(prisma, {
             actorId: userId,
             action: AuditAction.PASSWORD_CHANGED,
@@ -220,7 +208,7 @@ const resetPassword = async (payload: TResetPasswordPayload, context: IRequestCo
             where: { id: user.id },
             data: { password, resetTokenHash: null, resetTokenExpiresAt: null },
         }),
-        prisma.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+        prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
         recordAudit(prisma, {
             actorId: user.id,
             action: AuditAction.PASSWORD_RESET,

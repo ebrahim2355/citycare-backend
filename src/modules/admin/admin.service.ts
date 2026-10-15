@@ -191,7 +191,7 @@ const updateUserStatus = async (admin: IAuthUser, id: string, payload: TUpdateSt
         const updated = await tx.user.update({ where: { id }, data: { status: payload.status }, select: safeUserSelect });
 
         if (payload.status === UserStatus.BLOCKED) {
-            await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+            await tx.refreshToken.deleteMany({ where: { userId: id } });
         }
 
         await recordAudit(tx, {
@@ -230,7 +230,7 @@ const deleteUser = async (admin: IAuthUser, id: string, context: IRequestContext
 
     await prisma.$transaction(async (tx) => {
         await tx.user.update({ where: { id }, data: { deletedAt: new Date() } });
-        await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.refreshToken.deleteMany({ where: { userId: id } });
 
         await recordAudit(tx, {
             actorId: admin.id,
