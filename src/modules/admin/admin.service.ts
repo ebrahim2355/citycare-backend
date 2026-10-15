@@ -257,6 +257,7 @@ const getStaffWorkload = async (query: TStaffQuery) => {
             name: true,
             email: true,
             status: true,
+            acceptsAssignments: true,
             department: { select: { id: true, name: true } },
             _count: {
                 select: { assignedComplaints: { where: { status: { in: ACTIVE_ASSIGNMENT_STATUSES }, deletedAt: null } } },
@@ -270,7 +271,7 @@ const getStaffWorkload = async (query: TStaffQuery) => {
             ...staff,
             activeAssignments: _count.assignedComplaints,
             capacity: maxActive,
-            isAvailable: staff.status === UserStatus.ACTIVE && _count.assignedComplaints < maxActive,
+            isAvailable: staff.status === UserStatus.ACTIVE && staff.acceptsAssignments && _count.assignedComplaints < maxActive,
         }))
         .sort((a, b) => a.activeAssignments - b.activeAssignments);
 };

@@ -17,12 +17,13 @@ interface ILockedStaff {
     role: Role;
     status: UserStatus;
     departmentId: string | null;
+    acceptsAssignments: boolean;
     deletedAt: Date | null;
 }
 
 const lockStaff = async (tx: Prisma.TransactionClient, staffId: string) => {
     const rows = await tx.$queryRaw<ILockedStaff[]>`
-        SELECT "id", "name", "role", "status", "departmentId", "deletedAt"
+        SELECT "id", "name", "role", "status", "departmentId", "acceptsAssignments", "deletedAt"
         FROM "users"
         WHERE "id" = ${staffId}
         FOR UPDATE
@@ -47,6 +48,7 @@ const getCandidatesByWorkload = async (tx: Prisma.TransactionClient, departmentI
         where: {
             role: Role.STAFF,
             status: UserStatus.ACTIVE,
+            acceptsAssignments: true,
             deletedAt: null,
             departmentId,
             ...(currentStaffId ? { id: { not: currentStaffId } } : {}),
@@ -76,6 +78,10 @@ const getStaffProblem = (staff: ILockedStaff | null, departmentId: string) => {
 
     if (staff.departmentId !== departmentId) {
         return "This staff member works in another department";
+    }
+
+    if (!staff.acceptsAssignments) {
+        return "This staff member is not taking new complaints right now";
     }
 
     return null;

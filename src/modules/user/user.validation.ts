@@ -16,6 +16,7 @@ const updateProfileSchema = z.object({
                 .optional(),
             address: z.string().trim().max(200, "Address cannot be longer than 200 characters").optional(),
             avatarUrl: z.url("avatarUrl must be a valid URL").optional(),
+            acceptsAssignments: z.boolean("acceptsAssignments must be true or false").optional(),
         })
         .refine((body) => Object.keys(body).length > 0, "Send at least one field to update"),
 });

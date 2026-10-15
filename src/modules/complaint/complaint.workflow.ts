@@ -178,7 +178,9 @@ const reopenComplaint = async (user: IAuthUser, id: string, payload: TReopenComp
                 resolvedAt: true,
                 reopenCount: true,
                 category: { select: { slaHours: true } },
-                assignedStaff: { select: { id: true, role: true, status: true, departmentId: true, deletedAt: true } },
+                assignedStaff: {
+                    select: { id: true, role: true, status: true, departmentId: true, acceptsAssignments: true, deletedAt: true },
+                },
             },
         });
 
@@ -207,6 +209,7 @@ const reopenComplaint = async (user: IAuthUser, id: string, payload: TReopenComp
                 !staff.deletedAt &&
                 staff.role === Role.STAFF &&
                 staff.status === UserStatus.ACTIVE &&
+                staff.acceptsAssignments &&
                 staff.departmentId === complaint.departmentId
         );
         const nextStatus = staffIsAvailable ? ComplaintStatus.IN_PROGRESS : ComplaintStatus.SUBMITTED;

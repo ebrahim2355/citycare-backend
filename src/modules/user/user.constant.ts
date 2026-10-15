@@ -9,6 +9,7 @@ export const safeUserSelect = {
     address: true,
     avatarUrl: true,
     departmentId: true,
+    acceptsAssignments: true,
     department: { select: { id: true, name: true } },
     createdAt: true,
     updatedAt: true,

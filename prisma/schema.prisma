@@ -36,6 +36,7 @@ model User {
   address             String?
   avatarUrl           String?
   departmentId        String?
+  acceptsAssignments  Boolean      @default(true)
   resetTokenHash      String?      @unique
   resetTokenExpiresAt DateTime?
   deletedAt           DateTime?
