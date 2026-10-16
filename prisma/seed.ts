@@ -5,6 +5,7 @@ import getRedis from "../src/lib/redis";
 import { addHours, generateTrackingCode } from "../src/modules/complaint/complaint.utils";
 import { invalidateCatalogCache } from "../src/utils/cache";
 import { hashPassword } from "../src/utils/password";
+import { buildHistory, historyCitizens, type ISampleComplaint } from "./seed-history";
 
 const departments = [
     { name: "Roads & Transport", description: "Roads, footpaths, bridges and traffic signals", contactEmail: "roads@citycare.com" },
@@ -67,22 +68,6 @@ const citizens = [
     { name: "Demo Citizen", email: "citizen@citycare.com", phone: "+8801700000001", address: "House 12, Road 5, Dhanmondi, Dhaka" },
     { name: "Sadia Karim", email: "citizen2@citycare.com", phone: "+8801700000002", address: "House 44, Road 9, Sector 7, Uttara, Dhaka" },
 ];
-
-interface ISampleComplaint {
-    title: string;
-    description: string;
-    category: string;
-    area: string;
-    address: string;
-    priority: Priority;
-    status: ComplaintStatus;
-    citizen: string;
-    staff?: string;
-    daysAgo: number;
-    resolutionNote?: string;
-    rejectionReason?: string;
-    rating?: number;
-}
 
 const sampleComplaints: ISampleComplaint[] = [
     {
@@ -246,7 +231,7 @@ const seedUsers = async () => {
         });
     }
 
-    for (const citizen of citizens) {
+    for (const citizen of [...citizens, ...historyCitizens]) {
         await prisma.user.upsert({
             where: { email: citizen.email },
             update: {},
@@ -254,7 +239,124 @@ const seedUsers = async () => {
         });
     }
 
-    console.log(`${staffMembers.length} demo staff members and ${citizens.length} demo citizens are ready`);
+    console.log(`${staffMembers.length} demo staff members and ${citizens.length + historyCitizens.length} demo citizens are ready`);
+};
+
+const createSample = async (sample: ISampleComplaint, adminId: string) => {
+    const category = await prisma.category.findUniqueOrThrow({ where: { name: sample.category } });
+    const citizen = await prisma.user.findUniqueOrThrow({ where: { email: sample.citizen } });
+    const staff = sample.staff ? await prisma.user.findUniqueOrThrow({ where: { email: sample.staff } }) : null;
+    const createdAt = daysBefore(sample.daysAgo);
+    const needsPayment = sample.status === ComplaintStatus.PENDING_PAYMENT;
+    const isResolved = sample.status === ComplaintStatus.RESOLVED || sample.status === ComplaintStatus.CLOSED;
+    const isRejected = sample.status === ComplaintStatus.REJECTED;
+    const timing = sample.timing ?? { assignAfterHours: 3, startAfterHours: 8, resolveAfterHours: 30, closeAfterHours: 40 };
+    const assignedAt = staff ? addHours(createdAt, timing.assignAfterHours) : null;
+    const resolvedAt = isResolved ? addHours(createdAt, timing.resolveAfterHours) : null;
+    const closedAt =
+        sample.status === ComplaintStatus.CLOSED ? addHours(createdAt, timing.closeAfterHours) : isRejected ? addHours(createdAt, 5) : null;
+
+    const updates: { actorId: string; fromStatus: ComplaintStatus | null; toStatus: ComplaintStatus; note: string; createdAt: Date }[] = [
+        {
+            actorId: citizen.id,
+            fromStatus: null,
+            toStatus: needsPayment ? ComplaintStatus.PENDING_PAYMENT : ComplaintStatus.SUBMITTED,
+            note: needsPayment ? "Request created. Waiting for the service fee payment." : "Complaint submitted",
+            createdAt,
+        },
+    ];
+
+    if (staff && assignedAt) {
+        updates.push({
+            actorId: adminId,
+            fromStatus: ComplaintStatus.SUBMITTED,
+            toStatus: ComplaintStatus.ASSIGNED,
+            note: `Assigned to ${staff.name}`,
+            createdAt: assignedAt,
+        });
+
+        if (sample.status !== ComplaintStatus.ASSIGNED) {
+            updates.push({
+                actorId: staff.id,
+                fromStatus: ComplaintStatus.ASSIGNED,
+                toStatus: ComplaintStatus.IN_PROGRESS,
+                note: "Work started",
+                createdAt: addHours(createdAt, timing.startAfterHours),
+            });
+        }
+
+        if (resolvedAt) {
+            updates.push({
+                actorId: staff.id,
+                fromStatus: ComplaintStatus.IN_PROGRESS,
+                toStatus: ComplaintStatus.RESOLVED,
+                note: sample.resolutionNote ?? "Resolved",
+                createdAt: resolvedAt,
+            });
+        }
+    }
+
+    if (sample.status === ComplaintStatus.CLOSED && closedAt) {
+        updates.push({
+            actorId: citizen.id,
+            fromStatus: ComplaintStatus.RESOLVED,
+            toStatus: ComplaintStatus.CLOSED,
+            note: `Closed by the citizen with a ${sample.rating} star rating`,
+            createdAt: closedAt,
+        });
+    }
+
+    if (isRejected && closedAt) {
+        updates.push({
+            actorId: adminId,
+            fromStatus: ComplaintStatus.SUBMITTED,
+            toStatus: ComplaintStatus.REJECTED,
+            note: sample.rejectionReason ?? "Rejected",
+            createdAt: closedAt,
+        });
+    }
+
+    await prisma.complaint.create({
+        data: {
+            trackingCode: generateTrackingCode(createdAt),
+            title: sample.title,
+            description: sample.description,
+            type: category.type,
+            priority: sample.priority,
+            status: sample.status,
+            address: sample.address,
+            area: sample.area,
+            latitude: sample.latitude ?? null,
+            longitude: sample.longitude ?? null,
+            fee: category.fee,
+            paymentStatus: needsPayment ? ComplaintPaymentStatus.UNPAID : ComplaintPaymentStatus.NOT_REQUIRED,
+            citizenId: citizen.id,
+            categoryId: category.id,
+            departmentId: category.departmentId,
+            assignedStaffId: staff?.id ?? null,
+            submittedAt: needsPayment ? null : createdAt,
+            assignedAt,
+            dueAt: needsPayment ? null : addHours(createdAt, category.slaHours),
+            resolvedAt,
+            closedAt,
+            resolutionNote: sample.resolutionNote ?? null,
+            rejectionReason: sample.rejectionReason ?? null,
+            createdAt,
+            updates: { create: updates },
+            ...(sample.rating
+                ? {
+                      feedback: {
+                          create: {
+                              citizenId: citizen.id,
+                              rating: sample.rating,
+                              comment: sample.comment === undefined ? "Quick work, thank you." : sample.comment || null,
+                              createdAt: closedAt ?? createdAt,
+                          },
+                      },
+                  }
+                : {}),
+        },
+    });
 };
 
 const seedComplaints = async (adminId: string) => {
@@ -266,111 +368,29 @@ const seedComplaints = async (adminId: string) => {
     }
 
     for (const sample of sampleComplaints) {
-        const category = await prisma.category.findUniqueOrThrow({ where: { name: sample.category } });
-        const citizen = await prisma.user.findUniqueOrThrow({ where: { email: sample.citizen } });
-        const staff = sample.staff ? await prisma.user.findUniqueOrThrow({ where: { email: sample.staff } }) : null;
-        const createdAt = daysBefore(sample.daysAgo);
-        const needsPayment = sample.status === ComplaintStatus.PENDING_PAYMENT;
-        const isResolved = sample.status === ComplaintStatus.RESOLVED || sample.status === ComplaintStatus.CLOSED;
-        const isRejected = sample.status === ComplaintStatus.REJECTED;
-        const assignedAt = staff ? addHours(createdAt, 3) : null;
-        const resolvedAt = isResolved ? addHours(createdAt, 30) : null;
-        const closedAt = sample.status === ComplaintStatus.CLOSED ? addHours(createdAt, 40) : isRejected ? addHours(createdAt, 5) : null;
-
-        const updates: { actorId: string; fromStatus: ComplaintStatus | null; toStatus: ComplaintStatus; note: string; createdAt: Date }[] =
-            [
-                {
-                    actorId: citizen.id,
-                    fromStatus: null,
-                    toStatus: needsPayment ? ComplaintStatus.PENDING_PAYMENT : ComplaintStatus.SUBMITTED,
-                    note: needsPayment ? "Request created. Waiting for the service fee payment." : "Complaint submitted",
-                    createdAt,
-                },
-            ];
-
-        if (staff && assignedAt) {
-            updates.push({
-                actorId: adminId,
-                fromStatus: ComplaintStatus.SUBMITTED,
-                toStatus: ComplaintStatus.ASSIGNED,
-                note: `Assigned to ${staff.name}`,
-                createdAt: assignedAt,
-            });
-
-            if (sample.status !== ComplaintStatus.ASSIGNED) {
-                updates.push({
-                    actorId: staff.id,
-                    fromStatus: ComplaintStatus.ASSIGNED,
-                    toStatus: ComplaintStatus.IN_PROGRESS,
-                    note: "Work started",
-                    createdAt: addHours(createdAt, 8),
-                });
-            }
-
-            if (resolvedAt) {
-                updates.push({
-                    actorId: staff.id,
-                    fromStatus: ComplaintStatus.IN_PROGRESS,
-                    toStatus: ComplaintStatus.RESOLVED,
-                    note: sample.resolutionNote ?? "Resolved",
-                    createdAt: resolvedAt,
-                });
-            }
-        }
-
-        if (sample.status === ComplaintStatus.CLOSED && closedAt) {
-            updates.push({
-                actorId: citizen.id,
-                fromStatus: ComplaintStatus.RESOLVED,
-                toStatus: ComplaintStatus.CLOSED,
-                note: `Closed by the citizen with a ${sample.rating} star rating`,
-                createdAt: closedAt,
-            });
-        }
-
-        if (isRejected && closedAt) {
-            updates.push({
-                actorId: adminId,
-                fromStatus: ComplaintStatus.SUBMITTED,
-                toStatus: ComplaintStatus.REJECTED,
-                note: sample.rejectionReason ?? "Rejected",
-                createdAt: closedAt,
-            });
-        }
-
-        await prisma.complaint.create({
-            data: {
-                trackingCode: generateTrackingCode(createdAt),
-                title: sample.title,
-                description: sample.description,
-                type: category.type,
-                priority: sample.priority,
-                status: sample.status,
-                address: sample.address,
-                area: sample.area,
-                fee: category.fee,
-                paymentStatus: needsPayment ? ComplaintPaymentStatus.UNPAID : ComplaintPaymentStatus.NOT_REQUIRED,
-                citizenId: citizen.id,
-                categoryId: category.id,
-                departmentId: category.departmentId,
-                assignedStaffId: staff?.id ?? null,
-                submittedAt: needsPayment ? null : createdAt,
-                assignedAt,
-                dueAt: needsPayment ? null : addHours(createdAt, category.slaHours),
-                resolvedAt,
-                closedAt,
-                resolutionNote: sample.resolutionNote ?? null,
-                rejectionReason: sample.rejectionReason ?? null,
-                createdAt,
-                updates: { create: updates },
-                ...(sample.rating
-                    ? { feedback: { create: { citizenId: citizen.id, rating: sample.rating, comment: "Quick work, thank you." } } }
-                    : {}),
-            },
-        });
+        await createSample(sample, adminId);
     }
 
     console.log(`${sampleComplaints.length} sample complaints are ready`);
+};
+
+const seedHistory = async (adminId: string) => {
+    const existing = await prisma.complaint.count({
+        where: { citizen: { email: { in: historyCitizens.map((citizen) => citizen.email) } } },
+    });
+
+    if (existing > 0) {
+        console.log("History complaints already exist, skipped");
+        return;
+    }
+
+    const history = buildHistory();
+
+    for (const sample of history) {
+        await createSample(sample, adminId);
+    }
+
+    console.log(`${history.length} history complaints are ready`);
 };
 
 const main = async () => {
@@ -380,6 +400,7 @@ const main = async () => {
     await seedCategories();
     await seedUsers();
     await seedComplaints(admin.id);
+    await seedHistory(admin.id);
     await invalidateCatalogCache();
 };
 
