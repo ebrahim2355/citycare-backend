@@ -32,7 +32,7 @@ const staffAccount = (user: IPerson & { role: string; department: { name: string
 };
 
 const passwordReset = (user: IPerson, token: string) => {
-    const link = config.clientUrl ? `${config.clientUrl}/auth/reset-password?token=${token}` : null;
+    const link = config.clientUrl ? `${config.clientUrl}/reset-password?token=${token}` : null;
 
     return sendEmail({ to: user.email, ...EmailTemplates.passwordReset(user.name, token, config.resetTokenMinutes, link) });
 };
