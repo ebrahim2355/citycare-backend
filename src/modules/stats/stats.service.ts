@@ -1,5 +1,5 @@
 import config from "../../config";
-import { ComplaintStatus, PaymentStatus, type Prisma, Role, UserStatus } from "../../generated/prisma/client";
+import { ComplaintStatus, ContactStatus, PaymentStatus, Priority, type Prisma, Role, UserStatus } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { remember } from "../../utils/cache";
@@ -7,6 +7,8 @@ import { ACTIVE_ASSIGNMENT_STATUSES, OPEN_STATUSES } from "../complaint/complain
 
 const PUBLIC_STATS_SECONDS = 5 * 60;
 const ADMIN_STATS_SECONDS = 60;
+const TREND_DAYS = 30;
+const STAFF_WEEKS = 8;
 const RESOLVED_STATUSES: ComplaintStatus[] = [ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED];
 
 interface IDepartmentStats {
@@ -19,12 +21,29 @@ interface IDepartmentStats {
     averageRating: number | null;
 }
 
+interface ITrendDay {
+    date: string;
+    created: number;
+    resolved: number;
+}
+
 const countByStatus = async (where: Prisma.ComplaintWhereInput) => {
     const groups = await prisma.complaint.groupBy({ by: ["status"], where, _count: { _all: true } });
     const result = Object.fromEntries(Object.values(ComplaintStatus).map((status) => [status, 0])) as Record<ComplaintStatus, number>;
 
     for (const group of groups) {
         result[group.status] = group._count._all;
+    }
+
+    return result;
+};
+
+const countByPriority = async (where: Prisma.ComplaintWhereInput) => {
+    const groups = await prisma.complaint.groupBy({ by: ["priority"], where, _count: { _all: true } });
+    const result = Object.fromEntries(Object.values(Priority).map((priority) => [priority, 0])) as Record<Priority, number>;
+
+    for (const group of groups) {
+        result[group.priority] = group._count._all;
     }
 
     return result;
@@ -48,31 +67,60 @@ const getAverageResolutionHours = async () => {
     return roundTo(rows[0]?.hours, 1);
 };
 
+const getRecentlyResolved = async () => {
+    const complaints = await prisma.complaint.findMany({
+        where: { deletedAt: null, status: { in: RESOLVED_STATUSES }, resolvedAt: { not: null } },
+        select: {
+            id: true,
+            title: true,
+            area: true,
+            submittedAt: true,
+            resolvedAt: true,
+            category: { select: { name: true } },
+            department: { select: { name: true } },
+        },
+        orderBy: { resolvedAt: "desc" },
+        take: 6,
+    });
+
+    return complaints.map(({ submittedAt, resolvedAt, category, department, ...complaint }) => ({
+        ...complaint,
+        category: category.name,
+        department: department.name,
+        resolvedAt,
+        resolutionHours: submittedAt && resolvedAt ? roundTo((resolvedAt.getTime() - submittedAt.getTime()) / (60 * 60 * 1000), 1) : null,
+    }));
+};
+
 const getPublicStats = () => {
-    return remember("stats:public", PUBLIC_STATS_SECONDS, async () => {
+    return remember("stats:public:v2", PUBLIC_STATS_SECONDS, async () => {
         const visible: Prisma.ComplaintWhereInput = {
             deletedAt: null,
             status: { notIn: [ComplaintStatus.PENDING_PAYMENT, ComplaintStatus.CANCELLED] },
         };
 
-        const [byStatus, topCategories, topAreas, averageResolutionHours] = await Promise.all([
-            countByStatus(visible),
-            prisma.complaint.groupBy({
-                by: ["categoryId"],
-                where: visible,
-                _count: { _all: true },
-                orderBy: { _count: { categoryId: "desc" } },
-                take: 5,
-            }),
-            prisma.complaint.groupBy({
-                by: ["area"],
-                where: visible,
-                _count: { _all: true },
-                orderBy: { _count: { area: "desc" } },
-                take: 5,
-            }),
-            getAverageResolutionHours(),
-        ]);
+        const [byStatus, topCategories, topAreas, averageResolutionHours, recentlyResolved, departmentCount, serviceCount] =
+            await Promise.all([
+                countByStatus(visible),
+                prisma.complaint.groupBy({
+                    by: ["categoryId"],
+                    where: visible,
+                    _count: { _all: true },
+                    orderBy: { _count: { categoryId: "desc" } },
+                    take: 5,
+                }),
+                prisma.complaint.groupBy({
+                    by: ["area"],
+                    where: visible,
+                    _count: { _all: true },
+                    orderBy: { _count: { area: "desc" } },
+                    take: 5,
+                }),
+                getAverageResolutionHours(),
+                getRecentlyResolved(),
+                prisma.department.count({ where: { deletedAt: null } }),
+                prisma.category.count({ where: { deletedAt: null, isActive: true } }),
+            ]);
 
         const categories = await prisma.category.findMany({
             where: { id: { in: topCategories.map((item) => item.categoryId) } },
@@ -89,12 +137,15 @@ const getPublicStats = () => {
             resolvedComplaints: resolved,
             resolutionRate: total ? Number(((resolved / total) * 100).toFixed(1)) : 0,
             averageResolutionHours,
+            departmentCount,
+            serviceCount,
             topCategories: topCategories.map((item) => ({
                 categoryId: item.categoryId,
                 name: categoryNames.get(item.categoryId) ?? "Unknown",
                 complaints: item._count._all,
             })),
             topAreas: topAreas.map((item) => ({ area: item.area, complaints: item._count._all })),
+            recentlyResolved,
         };
     });
 };
@@ -118,24 +169,64 @@ const getDepartmentStats = () => {
     `;
 };
 
+const getTrend = () => {
+    return prisma.$queryRaw<ITrendDay[]>`
+        WITH days AS (
+            SELECT generate_series(date_trunc('day', NOW()) - make_interval(days => ${TREND_DAYS - 1}), date_trunc('day', NOW()), interval '1 day') AS "day"
+        ),
+        created AS (
+            SELECT date_trunc('day', "createdAt") AS "day", COUNT(*)::int AS "count"
+            FROM "complaints"
+            WHERE "deletedAt" IS NULL AND "createdAt" >= date_trunc('day', NOW()) - make_interval(days => ${TREND_DAYS - 1})
+            GROUP BY 1
+        ),
+        resolved AS (
+            SELECT date_trunc('day', "resolvedAt") AS "day", COUNT(*)::int AS "count"
+            FROM "complaints"
+            WHERE "deletedAt" IS NULL AND "resolvedAt" >= date_trunc('day', NOW()) - make_interval(days => ${TREND_DAYS - 1})
+            GROUP BY 1
+        )
+        SELECT to_char(days."day", 'YYYY-MM-DD') AS "date", COALESCE(created."count", 0)::int AS "created", COALESCE(resolved."count", 0)::int AS "resolved"
+        FROM days
+        LEFT JOIN created ON created."day" = days."day"
+        LEFT JOIN resolved ON resolved."day" = days."day"
+        ORDER BY days."day" ASC
+    `;
+};
+
 const getAdminStats = () => {
-    return remember("stats:admin", ADMIN_STATS_SECONDS, async () => {
+    return remember("stats:admin:v2", ADMIN_STATS_SECONDS, async () => {
         const now = new Date();
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const active: Prisma.ComplaintWhereInput = { deletedAt: null };
 
-        const [usersByRole, blockedUsers, byStatus, unassigned, overdue, createdLast7Days, payments, feedback, departments] =
-            await Promise.all([
-                prisma.user.groupBy({ by: ["role"], where: { deletedAt: null }, _count: { _all: true } }),
-                prisma.user.count({ where: { deletedAt: null, status: UserStatus.BLOCKED } }),
-                countByStatus(active),
-                prisma.complaint.count({ where: { ...active, status: ComplaintStatus.SUBMITTED, assignedStaffId: null } }),
-                prisma.complaint.count({ where: { ...active, status: { in: OPEN_STATUSES }, dueAt: { lt: now } } }),
-                prisma.complaint.count({ where: { ...active, createdAt: { gte: weekAgo } } }),
-                prisma.payment.groupBy({ by: ["status"], _count: { _all: true }, _sum: { amount: true } }),
-                prisma.feedback.aggregate({ _count: { _all: true }, _avg: { rating: true } }),
-                getDepartmentStats(),
-            ]);
+        const [
+            usersByRole,
+            blockedUsers,
+            byStatus,
+            openByPriority,
+            unassigned,
+            overdue,
+            createdLast7Days,
+            payments,
+            feedback,
+            departments,
+            trend,
+            newMessages,
+        ] = await Promise.all([
+            prisma.user.groupBy({ by: ["role"], where: { deletedAt: null }, _count: { _all: true } }),
+            prisma.user.count({ where: { deletedAt: null, status: UserStatus.BLOCKED } }),
+            countByStatus(active),
+            countByPriority({ ...active, status: { in: OPEN_STATUSES } }),
+            prisma.complaint.count({ where: { ...active, status: ComplaintStatus.SUBMITTED, assignedStaffId: null } }),
+            prisma.complaint.count({ where: { ...active, status: { in: OPEN_STATUSES }, dueAt: { lt: now } } }),
+            prisma.complaint.count({ where: { ...active, createdAt: { gte: weekAgo } } }),
+            prisma.payment.groupBy({ by: ["status"], _count: { _all: true }, _sum: { amount: true } }),
+            prisma.feedback.aggregate({ _count: { _all: true }, _avg: { rating: true } }),
+            getDepartmentStats(),
+            getTrend(),
+            prisma.contactMessage.count({ where: { status: ContactStatus.NEW } }),
+        ]);
 
         const roleCount = (role: Role) => usersByRole.find((item) => item.role === role)?._count._all ?? 0;
         const payment = (status: PaymentStatus) => payments.find((item) => item.status === status);
@@ -151,6 +242,7 @@ const getAdminStats = () => {
             complaints: {
                 total: Object.values(byStatus).reduce((sum, count) => sum + count, 0),
                 byStatus,
+                openByPriority,
                 open: sumStatuses(byStatus, OPEN_STATUSES),
                 unassigned,
                 overdue,
@@ -167,7 +259,9 @@ const getAdminStats = () => {
                 total: feedback._count._all,
                 averageRating: roundTo(feedback._avg.rating, 2),
             },
+            messages: { new: newMessages },
             departments,
+            trend,
             generatedAt: now,
         };
     });
@@ -198,14 +292,61 @@ const getCitizenStats = async (userId: string) => {
     };
 };
 
+const getStaffPerformance = async (userId: string) => {
+    const [timing, weeks, ratings] = await Promise.all([
+        prisma.$queryRaw<{ averageHours: number | null; resolved: number; onTime: number }[]>`
+            SELECT
+                AVG(EXTRACT(EPOCH FROM ("resolvedAt" - COALESCE("assignedAt", "submittedAt"))) / 3600)::float AS "averageHours",
+                COUNT(*)::int AS "resolved",
+                COUNT(*) FILTER (WHERE "dueAt" IS NULL OR "resolvedAt" <= "dueAt")::int AS "onTime"
+            FROM "complaints"
+            WHERE "assignedStaffId" = ${userId} AND "deletedAt" IS NULL AND "resolvedAt" IS NOT NULL
+        `,
+        prisma.$queryRaw<{ week: string; resolved: number }[]>`
+            WITH weeks AS (
+                SELECT generate_series(date_trunc('week', NOW()) - make_interval(weeks => ${STAFF_WEEKS - 1}), date_trunc('week', NOW()), interval '1 week') AS "week"
+            ),
+            resolved AS (
+                SELECT date_trunc('week', "resolvedAt") AS "week", COUNT(*)::int AS "count"
+                FROM "complaints"
+                WHERE "assignedStaffId" = ${userId} AND "deletedAt" IS NULL AND "resolvedAt" IS NOT NULL
+                GROUP BY 1
+            )
+            SELECT to_char(weeks."week", 'YYYY-MM-DD') AS "week", COALESCE(resolved."count", 0)::int AS "resolved"
+            FROM weeks
+            LEFT JOIN resolved ON resolved."week" = weeks."week"
+            ORDER BY weeks."week" ASC
+        `,
+        prisma.feedback.groupBy({
+            by: ["rating"],
+            where: { complaint: { assignedStaffId: userId, deletedAt: null } },
+            _count: { _all: true },
+        }),
+    ]);
+
+    const row = timing[0];
+
+    return {
+        averageResolutionHours: roundTo(row?.averageHours, 1),
+        onTimeRate: row?.resolved ? Number(((row.onTime / row.resolved) * 100).toFixed(1)) : null,
+        resolvedByWeek: weeks,
+        ratingBreakdown: [1, 2, 3, 4, 5].map((rating) => ({
+            rating,
+            count: ratings.find((item) => item.rating === rating)?._count._all ?? 0,
+        })),
+    };
+};
+
 const getStaffStats = async (userId: string) => {
     const mine: Prisma.ComplaintWhereInput = { assignedStaffId: userId, deletedAt: null };
     const now = new Date();
 
-    const [byStatus, overdue, rating] = await Promise.all([
+    const [byStatus, overdue, rating, staff, performance] = await Promise.all([
         countByStatus(mine),
         prisma.complaint.count({ where: { ...mine, status: { in: ACTIVE_ASSIGNMENT_STATUSES }, dueAt: { lt: now } } }),
         prisma.feedback.aggregate({ where: { complaint: mine }, _avg: { rating: true }, _count: { _all: true } }),
+        prisma.user.findUnique({ where: { id: userId }, select: { acceptsAssignments: true } }),
+        getStaffPerformance(userId),
     ]);
 
     const active = sumStatuses(byStatus, ACTIVE_ASSIGNMENT_STATUSES);
@@ -214,11 +355,14 @@ const getStaffStats = async (userId: string) => {
         role: Role.STAFF,
         activeAssignments: active,
         capacity: config.complaint.maxActiveAssignments,
+        acceptsAssignments: staff?.acceptsAssignments ?? true,
+        byStatus,
         waitingToStart: byStatus[ComplaintStatus.ASSIGNED],
         inProgress: byStatus[ComplaintStatus.IN_PROGRESS],
         overdue,
         resolved: sumStatuses(byStatus, RESOLVED_STATUSES),
         feedback: { total: rating._count._all, averageRating: roundTo(rating._avg.rating, 2) },
+        ...performance,
     };
 };
 
