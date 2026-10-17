@@ -4,7 +4,7 @@
 
 CityCare is a backend API for a city. A citizen reports a problem (a pothole, a broken street light, garbage that was not collected) or asks for a paid city service (bulk waste pickup, septic tank cleaning). The complaint goes to the right department, an admin assigns it to a staff member, the staff member resolves it and the citizen gives feedback. Every step is saved, so the citizen can follow the complaint with a tracking code.
 
-This is a backend only project. There is no frontend. All features work from Postman or Swagger.
+All features work from Postman or Swagger. The CityCare frontend (Next.js) is built on top of this API.
 
 ## Links
 
@@ -25,6 +25,8 @@ The seed script creates these accounts.
 | Staff (Roads & Transport) | roads.staff@citycare.com | Staff12345 |
 | Citizen | citizen@citycare.com | Citizen12345 |
 
+The seed also adds more staff members (one per department), more citizens (`citizen2@citycare.com` to `citizen6@citycare.com`, same password) and a few weeks of past complaints, so the dashboards have real history.
+
 Stripe is in test mode. Pay with the card `4242 4242 4242 4242`, any future date and any CVC.
 
 ## The Problem
@@ -38,8 +40,8 @@ CityCare solves this with one place for all complaints, automatic routing to the
 | Role | What this role can do |
 | --- | --- |
 | **Citizen** | Register and login, submit complaints and service requests, upload photos, pay the service fee, track, cancel, reopen and give feedback |
-| **Staff** | See the complaints that are assigned to them, start the work, resolve with a note, upload proof photos |
-| **Admin** | Manage departments, categories and users, assign and transfer complaints, reject complaints, see statistics and audit logs |
+| **Staff** | See the complaints that are assigned to them, start the work, resolve with a note, upload proof photos, pause new jobs while on leave |
+| **Admin** | Manage departments, categories and users, assign and transfer complaints, reject complaints, answer contact messages, see statistics and audit logs |
 
 A citizen registers by themselves. Staff and admin accounts are created by an admin.
 
@@ -53,6 +55,7 @@ A citizen registers by themselves. Staff and admin accounts are created by an ad
 - Public tracking page data with a tracking code, without personal data
 - Assignment by the admin, or automatic assignment to the staff member with the fewest active complaints
 - A staff member has a capacity limit. Concurrent assignments cannot go over the limit
+- Staff can pause new jobs while on leave. Automatic and manual assignment skip them
 - Status workflow with a timeline: who changed what and when
 - SLA due date for every complaint and an overdue filter
 - Cancel, reopen (within 7 days, 2 times at most) and transfer to another department
@@ -64,7 +67,9 @@ A citizen registers by themselves. Staff and admin accounts are created by an ad
 - Soft delete for users, departments, categories, complaints and photos
 - Audit log of every important action
 - Redis cache for the public lists and the statistics, Redis based rate limiting
-- Statistics for the public, for each role and for the admin dashboard
+- Statistics for the public, for each role and for the admin dashboard, with a 30 day trend and weekly staff performance
+- Contact form inbox. Admins reply by email from the dashboard
+- Works behind a server side frontend: with a shared key the API rate limits by the real client IP
 
 ## Tech Stack
 
@@ -299,7 +304,7 @@ Protected routes need the header `Authorization: Bearer <accessToken>`.
 
 Base URL: `/api/v1`
 
-The API has 56 endpoints.
+The API has 60 endpoints.
 
 ### Auth
 
@@ -383,6 +388,12 @@ The API has 56 endpoints.
 | GET | `/stats/public` | Public | Get public statistics |
 | GET | `/stats/me` | Any logged in user | Get the numbers for the dashboard of the logged in user |
 
+### Contact
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| POST | `/contact` | Public | Send a message to the city team |
+
 ### Admin
 
 | Method | Endpoint | Access | Description |
@@ -395,6 +406,9 @@ The API has 56 endpoints.
 | GET | `/admin/staff-workload` | Admin | Get the staff members with their active complaints |
 | GET | `/admin/dashboard-stats` | Admin | Get the platform statistics |
 | GET | `/admin/audit-logs` | Admin | Get the audit logs |
+| GET | `/admin/messages` | Admin | Get the contact messages |
+| POST | `/admin/messages/:id/reply` | Admin | Reply to a contact message by email |
+| PATCH | `/admin/messages/:id/status` | Admin | Close or reopen a contact message |
 
 ### System
 
@@ -405,7 +419,7 @@ The API has 56 endpoints.
 ## Security
 
 - Passwords are hashed with bcrypt. Refresh tokens and reset tokens are stored as SHA-256 hashes
-- Access tokens are short lived JWTs. Refresh tokens are rotated on every use, and a reused token revokes the session
+- Access tokens are short lived JWTs. Refresh tokens are rotated on every use. Parallel requests may use the same token for a few seconds, after that a reused token revokes the session
 - helmet security headers, a CORS allow list and a JSON body size limit
 - Rate limiting on every route and a stricter limit on the auth routes. The counters are in Redis, so the limit is shared between serverless instances
 - Zod validation on every body, query and path parameter

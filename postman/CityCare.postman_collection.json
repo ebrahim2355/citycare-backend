@@ -1566,7 +1566,7 @@
                 "me"
               ]
             },
-            "description": "Access: Any logged in user.",
+            "description": "Access: Any logged in user. A staff member can also send acceptsAssignments: false to pause new jobs while on leave.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2969,7 +2969,7 @@
                 "me"
               ]
             },
-            "description": "Access: Any logged in user.",
+            "description": "Access: Any logged in user. Staff also get their weekly resolved jobs, rating breakdown, on time rate and availability.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2979,6 +2979,46 @@
                   "type": "string"
                 }
               ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Contact",
+      "item": [
+        {
+          "name": "Send a message to the city team",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contact"
+              ]
+            },
+            "description": "Access: Public. Rate limited. The sender gets a confirmation email.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Rina Das\",\n    \"email\": \"rina@example.com\",\n    \"topic\": \"PAYMENT\",\n    \"subject\": \"Refund question\",\n    \"message\": \"I paid twice for one request by mistake.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -3376,6 +3416,157 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Get the contact messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "topic",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "searchTerm",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: Admin.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reply to a contact message by email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/messages/{{messageId}}/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "messages",
+                "{{messageId}}",
+                "reply"
+              ]
+            },
+            "description": "Access: Admin.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"reply\": \"We checked it. The second payment was refunded today.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Close or reopen a contact message",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/messages/{{messageId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "messages",
+                "{{messageId}}",
+                "status"
+              ]
+            },
+            "description": "Access: Admin.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"CLOSED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -3473,6 +3664,10 @@
     },
     {
       "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "messageId",
       "value": ""
     }
   ]
