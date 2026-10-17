@@ -4,13 +4,15 @@
 
 CityCare is a backend API for a city. A citizen reports a problem (a pothole, a broken street light, garbage that was not collected) or asks for a paid city service (bulk waste pickup, septic tank cleaning). The complaint goes to the right department, an admin assigns it to a staff member, the staff member resolves it and the citizen gives feedback. Every step is saved, so the citizen can follow the complaint with a tracking code.
 
-All features work from Postman or Swagger. The CityCare frontend (Next.js) is built on top of this API.
+All features work from Postman or Swagger. The [CityCare frontend](https://github.com/ebrahim2355/citycare-frontend) (Next.js) is built on top of this API.
 
 ## Links
 
 | Item | Link |
 | --- | --- |
 | Live API | https://citycare-backend.vercel.app |
+| Live Frontend | https://citycare-frontend-azure.vercel.app |
+| Frontend Repo | https://github.com/ebrahim2355/citycare-frontend |
 | API Docs (Swagger) | https://citycare-backend.vercel.app/api/v1/docs |
 | Health Check | https://citycare-backend.vercel.app/api/v1/health |
 | Postman Collection | [postman/CityCare.postman_collection.json](./postman/CityCare.postman_collection.json) |
