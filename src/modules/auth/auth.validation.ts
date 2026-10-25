@@ -7,7 +7,7 @@ const passwordSchema = z
     .regex(/[A-Za-z]/, "Password must have at least one letter")
     .regex(/[0-9]/, "Password must have at least one number");
 
-const emailSchema = z.email("A valid email is required").trim().toLowerCase();
+const emailSchema = z.string("A valid email is required").trim().toLowerCase().pipe(z.email("A valid email is required"));
 
 const registerSchema = z.object({
     body: z.object({

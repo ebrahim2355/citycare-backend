@@ -10,7 +10,7 @@ const createMessageSchema = z.object({
             .trim()
             .min(2, "Name must be at least 2 characters")
             .max(80, "Name cannot be longer than 80 characters"),
-        email: z.email("A valid email is required").trim().toLowerCase(),
+        email: z.string("A valid email is required").trim().toLowerCase().pipe(z.email("A valid email is required")),
         topic: z.enum(topics, "topic must be GENERAL, COMPLAINT_HELP, PAYMENT, ACCOUNT or FEEDBACK").default("GENERAL"),
         subject: z
             .string("Subject is required")

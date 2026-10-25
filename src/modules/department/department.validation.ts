@@ -8,7 +8,12 @@ const departmentFields = {
         .min(2, "Department name must be at least 2 characters")
         .max(80, "Department name cannot be longer than 80 characters"),
     description: z.string().trim().max(500, "Description cannot be longer than 500 characters").optional(),
-    contactEmail: z.email("contactEmail must be a valid email").trim().toLowerCase().optional(),
+    contactEmail: z
+        .string("contactEmail must be a valid email")
+        .trim()
+        .toLowerCase()
+        .pipe(z.email("contactEmail must be a valid email"))
+        .optional(),
 };
 
 const createDepartmentSchema = z.object({
