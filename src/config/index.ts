@@ -2,7 +2,9 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-dotenv.config({ path: path.join(process.cwd(), ".env"), quiet: true });
+if (process.env.NODE_ENV !== "test") {
+    dotenv.config({ path: path.join(process.cwd(), ".env"), quiet: true });
+}
 
 const envSchema = z.object({
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

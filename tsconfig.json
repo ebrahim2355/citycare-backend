@@ -10,7 +10,8 @@
         "noUncheckedIndexedAccess": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "noEmit": true
+        "noEmit": true,
+        "allowImportingTsExtensions": true
     },
-    "include": ["src", "prisma", "*.ts"]
+    "include": ["src", "prisma", "tests", "*.ts"]
 }
