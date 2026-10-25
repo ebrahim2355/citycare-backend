@@ -6,9 +6,9 @@ x-api-env: &api-env
   APP_URL: http://localhost:${API_PORT:-5000}
   CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
   CORS_ORIGINS: ${CORS_ORIGINS:-}
-  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-docker-secret-change-me-0123456789abcdef}
-  INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
-  CRON_SECRET: ${CRON_SECRET:-local-docker-cron-secret}
+  JWT_ACCESS_SECRET: ${DOCKER_JWT_SECRET:-local-docker-secret-change-me-0123456789abcdef}
+  INTERNAL_API_KEY: ${DOCKER_INTERNAL_API_KEY:-local-docker-internal-key}
+  CRON_SECRET: ${DOCKER_CRON_SECRET:-local-docker-cron-secret}
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
   EMAIL_FROM: CityCare <no-reply@citycare.local>
