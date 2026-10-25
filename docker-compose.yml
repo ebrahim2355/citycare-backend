@@ -1,0 +1,96 @@
+name: citycare
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql://citycare:citycare@db:5432/citycare
+  REDIS_URL: redis://redis:6379
+  APP_URL: http://localhost:${API_PORT:-5000}
+  CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-docker-secret-change-me-0123456789abcdef}
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
+  CRON_SECRET: ${CRON_SECRET:-local-docker-cron-secret}
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  EMAIL_FROM: CityCare <no-reply@citycare.local>
+  EMAIL_USER: ""
+  GOOGLE_APP_PASSWORD: ""
+  EMAIL_SKIP_DOMAINS: ""
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  CLOUDINARY_URL: ${CLOUDINARY_URL:-}
+  CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+  CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+  CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: citycare
+      POSTGRES_PASSWORD: citycare
+      POSTGRES_DB: citycare
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U citycare -d citycare"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
+  migrate:
+    build:
+      context: .
+      target: build
+    environment:
+      <<: *api-env
+    command: ["sh", "-c", "bunx prisma migrate deploy && bun run seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: runtime
+    environment:
+      <<: *api-env
+      PORT: "5000"
+    ports:
+      - "${API_PORT:-5000}:5000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  db-data:
+
+networks:
+  default:
+    name: citycare

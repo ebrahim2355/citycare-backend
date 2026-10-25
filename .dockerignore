@@ -1,0 +1,15 @@
+.git
+.github
+.vercel
+node_modules
+dist
+coverage
+src/generated
+tests
+postman
+*.log
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose.yml
