@@ -18,7 +18,22 @@ const uuid = "3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 const pagination = ["page", "limit", "sortOrder"];
 
 export const endpoints: IEndpointDoc[] = [
-    { method: "get", path: "/health", tag: "System", summary: "Check the API, the database and redis", access: "Public" },
+    {
+        method: "get",
+        path: "/health",
+        tag: "System",
+        summary: "Check the API, the database and redis",
+        access: "Public",
+        note: "Answers 503 when the database is not reachable, so it can be used as a readiness probe.",
+    },
+    {
+        method: "get",
+        path: "/health/live",
+        tag: "System",
+        summary: "Check that the API process is running",
+        access: "Public",
+        note: "Does not touch the database. Use it as a liveness probe.",
+    },
     {
         method: "post",
         path: "/auth/register",
