@@ -1,6 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
 import { ComplaintPaymentStatus, ComplaintStatus, PaymentStatus } from "../../generated/prisma/client";
+import logger from "../../lib/logger";
 import prisma from "../../lib/prisma";
 import getStripe from "../../lib/stripe";
 import type { IAuthUser } from "../../middlewares/auth";
@@ -111,7 +112,7 @@ const refundForComplaint = async (
 
         return "REFUNDED";
     } catch (error) {
-        console.error(`Refund failed for payment ${payment.id}`, error);
+        logger.error({ err: error, paymentId: payment.id }, "Refund failed");
 
         return "FAILED";
     }

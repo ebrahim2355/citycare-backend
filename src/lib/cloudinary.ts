@@ -2,6 +2,7 @@ import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
 import { StatusCodes } from "http-status-codes";
 import config from "../config";
 import AppError from "../errors/AppError";
+import logger from "./logger";
 
 const { url, cloudName, apiKey, apiSecret } = config.cloudinary;
 const hasSeparateKeys = Boolean(cloudName && apiKey && apiSecret);
@@ -43,6 +44,6 @@ export const deleteImage = async (publicId: string) => {
     try {
         await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
     } catch (error) {
-        console.error(`Could not delete image ${publicId}: ${error instanceof Error ? error.message : "unknown error"}`);
+        logger.warn({ err: error, publicId }, "Could not delete an image from Cloudinary");
     }
 };

@@ -7,6 +7,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env"), quiet: true });
 const envSchema = z.object({
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     PORT: z.coerce.number().int().positive().default(5000),
+    LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
     APP_URL: z.url().optional(),
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
     DATABASE_POOL_MAX: z.coerce.number().int().positive().optional(),
@@ -62,7 +63,10 @@ const appUrl = cleanUrl(env.APP_URL ?? (vercelUrl ? `https://${vercelUrl}` : `ht
 const config = {
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === "production",
+    isTest: env.NODE_ENV === "test",
     port: env.PORT,
+    logLevel: env.LOG_LEVEL ?? (env.NODE_ENV === "test" ? "silent" : "info"),
+    prettyLogs: env.NODE_ENV === "development" && !process.env.VERCEL,
     databaseUrl: env.DATABASE_URL,
     databasePoolMax: env.DATABASE_POOL_MAX ?? (process.env.VERCEL ? 5 : 10),
     redisUrl: env.REDIS_URL,

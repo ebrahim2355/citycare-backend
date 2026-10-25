@@ -1,9 +1,9 @@
 import cors from "cors";
 import express, { type Application, type Request, type Response } from "express";
 import helmet from "helmet";
-import morgan from "morgan";
 import config from "./config";
 import globalErrorHandler from "./middlewares/globalErrorHandler";
+import httpLogger from "./middlewares/httpLogger";
 import notFound from "./middlewares/notFound";
 import { apiLimiter } from "./middlewares/rateLimiter";
 import saveRawBody from "./middlewares/rawBody";
@@ -13,6 +13,7 @@ const app: Application = express();
 
 app.set("trust proxy", 1);
 
+app.use(httpLogger);
 app.use(helmet());
 app.use(
     cors({
@@ -25,10 +26,9 @@ app.use(
             callback(null, false);
         },
         credentials: true,
-        exposedHeaders: ["X-Cache", "RateLimit", "RateLimit-Policy", "Retry-After"],
+        exposedHeaders: ["X-Request-Id", "X-Cache", "RateLimit", "RateLimit-Policy", "Retry-After"],
     })
 );
-app.use(morgan(config.isProduction ? "combined" : "dev"));
 app.use(express.json({ limit: "1mb", verify: saveRawBody }));
 app.use(express.urlencoded({ extended: true }));
 

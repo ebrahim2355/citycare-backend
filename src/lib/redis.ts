@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import config from "../config";
+import logger from "./logger";
 
 let client: Redis | null = null;
 let lastErrorAt = 0;
@@ -19,7 +20,7 @@ const getRedis = (): Redis | null => {
         client.on("error", (error) => {
             if (Date.now() - lastErrorAt > 60 * 1000) {
                 lastErrorAt = Date.now();
-                console.error(`Redis error: ${error.message}`);
+                logger.warn({ err: error }, "Redis connection error");
             }
         });
     }

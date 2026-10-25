@@ -127,7 +127,7 @@ const globalErrorHandler = (error: unknown, _req: Request, res: Response, _next:
             errors: [{ message: "Send a smaller request body" }],
         };
     } else if (error instanceof Error) {
-        console.error(error);
+        res.err = error;
 
         if (!config.isProduction) {
             response.errors = [{ message: error.message }];

@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import config from "../config";
+import logger from "./logger";
 
 interface IEmail {
     to: string;
@@ -59,7 +60,7 @@ export const sendEmail = async (email: IEmail): Promise<boolean> => {
 
         return true;
     } catch (error) {
-        console.error(`Email "${email.subject}" to ${email.to} failed: ${error instanceof Error ? error.message : "unknown error"}`);
+        logger.error({ err: error, subject: email.subject }, "Email could not be sent");
 
         return false;
     }

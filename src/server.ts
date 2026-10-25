@@ -1,15 +1,16 @@
 import app from "./app";
 import config from "./config";
+import logger from "./lib/logger";
 import prisma from "./lib/prisma";
 import getRedis from "./lib/redis";
 
 if (!process.env.VERCEL) {
     const server = app.listen(config.port, () => {
-        console.log(`CityCare server is running on port ${config.port}`);
+        logger.info(`CityCare server is running on port ${config.port}`);
     });
 
     const shutdown = (signal: string) => {
-        console.log(`${signal} received, closing the server`);
+        logger.info(`${signal} received, closing the server`);
 
         server.close(async () => {
             await prisma.$disconnect();
