@@ -53,6 +53,7 @@ model User {
   payments           Payment[]
   attachments        ComplaintAttachment[]
   contactReplies     ContactMessage[]
+  notifications      Notification[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -203,6 +204,7 @@ model Complaint {
   feedback      Feedback?
   payments      Payment[]
   attachments   ComplaintAttachment[]
+  notifications Notification[]
 
   @@index([citizenId, status])
   @@index([assignedStaffId, status])
@@ -343,4 +345,37 @@ model ContactMessage {
   @@index([status, createdAt])
   @@index([email])
   @@map("contact_messages")
+}
+
+enum NotificationType {
+  COMPLAINT_SUBMITTED
+  COMPLAINT_ASSIGNED
+  COMPLAINT_UNASSIGNED
+  COMPLAINT_STATUS_CHANGED
+  COMPLAINT_REOPENED
+  COMPLAINT_TRANSFERRED
+  COMMENT_ADDED
+  FEEDBACK_RECEIVED
+  PAYMENT_RECEIVED
+  PAYMENT_REFUNDED
+  SLA_BREACHED
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  type        NotificationType
+  title       String
+  body        String
+  complaintId String?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  complaint Complaint? @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([readAt, createdAt])
+  @@map("notifications")
 }
