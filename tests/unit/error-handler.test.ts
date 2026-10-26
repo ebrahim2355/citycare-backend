@@ -44,11 +44,21 @@ describe("globalErrorHandler", () => {
         ["P2025", 404, "Record not found"],
         ["P2003", 400, "Invalid reference"],
         ["P2010", 400, "Database request failed"],
+        ["P2034", 409, "Please try again"],
     ])("maps the prisma error %s to %i", (code, status, message) => {
         const result = handle(prismaError(code));
 
         expect(result.status).toBe(status);
         expect(result.body.message).toBe(message);
+    });
+
+    it("asks for a retry when postgres aborts a transaction to break a deadlock", () => {
+        const deadlock = new Prisma.PrismaClientKnownRequestError("Raw query failed. Code: `40P01`. Message: `deadlock detected`", {
+            code: "P2010",
+            clientVersion: "7.10.0",
+        });
+
+        expect(handle(deadlock)).toMatchObject({ status: 409, body: { message: "Please try again" } });
     });
 
     it("maps stripe errors to payment and gateway statuses", () => {

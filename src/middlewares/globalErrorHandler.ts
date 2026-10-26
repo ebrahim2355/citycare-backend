@@ -50,6 +50,14 @@ const handlePrismaError = (error: Prisma.PrismaClientKnownRequestError): IErrorR
         };
     }
 
+    if (error.code === "P2034" || /\b(40P01|40001)\b|deadlock detected/i.test(error.message)) {
+        return {
+            statusCode: StatusCodes.CONFLICT,
+            message: "Please try again",
+            errors: [{ message: "The request clashed with another change made at the same moment. Send it again." }],
+        };
+    }
+
     return {
         statusCode: StatusCodes.BAD_REQUEST,
         message: "Database request failed",
