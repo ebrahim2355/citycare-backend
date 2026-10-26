@@ -1,12 +1,13 @@
 import { StatusCodes } from "http-status-codes";
 import config from "../../config";
 import AppError from "../../errors/AppError";
-import { ComplaintStatus, type Prisma, Role, UserStatus } from "../../generated/prisma/client";
+import { ComplaintStatus, NotificationType, type Prisma, Role, UserStatus } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { ACTIVE_ASSIGNMENT_STATUSES, OPEN_STATUSES } from "./complaint.constant";
 import { getComplaintDetail, lockComplaint } from "./complaint.utils";
 import type { TAssignComplaintPayload } from "./complaint.validation";
@@ -200,7 +201,37 @@ const assignComplaint = async (admin: IAuthUser, id: string, payload: TAssignCom
                 ipAddress: context.ipAddress,
             });
 
-            return getComplaintDetail(tx, id);
+            const detail = await getComplaintDetail(tx, id);
+            const label = complaintLabel(detail);
+
+            await Inbox.notify(tx, [detail.citizen.id], {
+                type: NotificationType.COMPLAINT_ASSIGNED,
+                title: "A staff member has your report",
+                body: `${label} is now with ${staff.name} from ${detail.department.name}.`,
+                complaintId: id,
+            });
+            await Inbox.notify(
+                tx,
+                [staff.id],
+                {
+                    type: NotificationType.COMPLAINT_ASSIGNED,
+                    title: "New job for you",
+                    body: `${label} in ${detail.area}.`,
+                    complaintId: id,
+                },
+                { skipUserId: admin.id }
+            );
+
+            if (complaint.assignedStaffId && complaint.assignedStaffId !== staff.id) {
+                await Inbox.notify(tx, [complaint.assignedStaffId], {
+                    type: NotificationType.COMPLAINT_UNASSIGNED,
+                    title: "Job moved to a colleague",
+                    body: `${label} was given to ${staff.name}.`,
+                    complaintId: id,
+                });
+            }
+
+            return detail;
         },
         { timeout: 15000 }
     );

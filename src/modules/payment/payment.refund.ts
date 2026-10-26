@@ -1,6 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import { ComplaintPaymentStatus, ComplaintStatus, PaymentStatus } from "../../generated/prisma/client";
+import { ComplaintPaymentStatus, ComplaintStatus, NotificationType, PaymentStatus } from "../../generated/prisma/client";
 import logger from "../../lib/logger";
 import prisma from "../../lib/prisma";
 import getStripe from "../../lib/stripe";
@@ -9,6 +9,7 @@ import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { lockComplaint } from "../complaint/complaint.utils";
+import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { paymentSelect } from "./payment.constant";
 
 export type TRefundResult = "REFUNDED" | "FAILED" | "NOT_NEEDED";
@@ -35,7 +36,18 @@ const applyRefund = async (
             return;
         }
 
-        await tx.complaint.update({ where: { id: complaint.id }, data: { paymentStatus: ComplaintPaymentStatus.REFUNDED } });
+        const refundedComplaint = await tx.complaint.update({
+            where: { id: complaint.id },
+            data: { paymentStatus: ComplaintPaymentStatus.REFUNDED },
+            select: { trackingCode: true, title: true },
+        });
+
+        await Inbox.notify(tx, [complaint.citizenId], {
+            type: NotificationType.PAYMENT_REFUNDED,
+            title: "Your service fee was refunded",
+            body: `${complaintLabel(refundedComplaint)}. ${reason}`,
+            complaintId: complaint.id,
+        });
 
         await tx.complaintUpdate.create({
             data: {

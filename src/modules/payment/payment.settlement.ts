@@ -2,13 +2,14 @@ import { StatusCodes } from "http-status-codes";
 import type Stripe from "stripe";
 import config from "../../config";
 import AppError from "../../errors/AppError";
-import { ComplaintPaymentStatus, ComplaintStatus, PaymentStatus } from "../../generated/prisma/client";
+import { ComplaintPaymentStatus, ComplaintStatus, NotificationType, PaymentStatus } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import getStripe from "../../lib/stripe";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { addHours, lockComplaint } from "../complaint/complaint.utils";
+import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { NotificationService } from "../notification/notification.service";
 import { PaymentCheckout } from "./payment.checkout";
 import { paymentSelect } from "./payment.constant";
@@ -63,7 +64,7 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
             const category = await tx.category.findUniqueOrThrow({ where: { id: complaint.categoryId }, select: { slaHours: true } });
             const now = new Date();
 
-            await tx.complaint.update({
+            const submitted = await tx.complaint.update({
                 where: { id: complaint.id },
                 data: {
                     status: ComplaintStatus.SUBMITTED,
@@ -71,6 +72,20 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
                     submittedAt: now,
                     dueAt: addHours(now, category.slaHours),
                 },
+                select: { trackingCode: true, title: true, area: true, department: { select: { name: true } } },
+            });
+
+            await Inbox.notify(tx, [payment.citizenId], {
+                type: NotificationType.PAYMENT_RECEIVED,
+                title: "Payment received",
+                body: `${complaintLabel(submitted)} is paid and now with ${submitted.department.name}.`,
+                complaintId: complaint.id,
+            });
+            await Inbox.notifyAdmins(tx, {
+                type: NotificationType.COMPLAINT_SUBMITTED,
+                title: "New paid request",
+                body: `${complaintLabel(submitted)} in ${submitted.area}, for ${submitted.department.name}.`,
+                complaintId: complaint.id,
             });
 
             await tx.complaintUpdate.create({

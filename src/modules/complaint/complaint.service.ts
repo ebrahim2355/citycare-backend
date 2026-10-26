@@ -1,12 +1,13 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import { CategoryType, ComplaintPaymentStatus, ComplaintStatus, Prisma, Role } from "../../generated/prisma/client";
+import { CategoryType, ComplaintPaymentStatus, ComplaintStatus, NotificationType, Prisma, Role } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import { getMeta, getPagination } from "../../utils/pagination";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { PaymentSettlement } from "../payment/payment.settlement";
 import {
     CITIZEN_DELETABLE_STATUSES,
@@ -94,6 +95,15 @@ const createComplaint = async (user: IAuthUser, payload: TCreateComplaintPayload
                     metadata: { trackingCode: created.trackingCode, categoryId: category.id, status: created.status },
                     ipAddress: context.ipAddress,
                 });
+
+                if (!requiresPayment) {
+                    await Inbox.notifyAdmins(tx, {
+                        type: NotificationType.COMPLAINT_SUBMITTED,
+                        title: "New complaint",
+                        body: `${complaintLabel(created)} in ${created.area}, for ${created.department.name}.`,
+                        complaintId: created.id,
+                    });
+                }
 
                 return created;
             });

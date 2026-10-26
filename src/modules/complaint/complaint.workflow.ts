@@ -1,12 +1,13 @@
 import { StatusCodes } from "http-status-codes";
 import config from "../../config";
 import AppError from "../../errors/AppError";
-import { ComplaintStatus, type Prisma, Role, UserStatus } from "../../generated/prisma/client";
+import { ComplaintStatus, NotificationType, type Prisma, Role, UserStatus } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
+import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { PaymentRefund, type TRefundResult } from "../payment/payment.refund";
 import { PaymentSettlement } from "../payment/payment.settlement";
 import { CITIZEN_EDITABLE_STATUSES, FEEDBACK_STATUSES, OPEN_STATUSES } from "./complaint.constant";
@@ -32,6 +33,54 @@ const ADMIN_TRANSITIONS: TTransitionMap = {
     [ComplaintStatus.ASSIGNED]: [ComplaintStatus.REJECTED],
     [ComplaintStatus.IN_PROGRESS]: [ComplaintStatus.REJECTED],
     [ComplaintStatus.RESOLVED]: [ComplaintStatus.CLOSED],
+};
+
+const STATUS_MESSAGES: Partial<Record<ComplaintStatus, { title: string; body: string }>> = {
+    [ComplaintStatus.IN_PROGRESS]: { title: "Work has started", body: "is being worked on now." },
+    [ComplaintStatus.RESOLVED]: { title: "Your report was resolved", body: "is fixed. Check the result and rate the work." },
+    [ComplaintStatus.REJECTED]: { title: "Your report was rejected", body: "was rejected by the city team." },
+    [ComplaintStatus.CLOSED]: { title: "Your report was closed", body: "was closed by the city team." },
+};
+
+const notifyStatusChange = async (
+    tx: Prisma.TransactionClient,
+    detail: Awaited<ReturnType<typeof getComplaintDetail>>,
+    actorId: string
+) => {
+    const message = STATUS_MESSAGES[detail.status];
+
+    if (!message) {
+        return;
+    }
+
+    const label = complaintLabel(detail);
+    const reason = detail.status === ComplaintStatus.REJECTED && detail.rejectionReason ? ` Reason: ${detail.rejectionReason}` : "";
+
+    await Inbox.notify(
+        tx,
+        [detail.citizen.id],
+        {
+            type: NotificationType.COMPLAINT_STATUS_CHANGED,
+            title: message.title,
+            body: `${label} ${message.body}${reason}`,
+            complaintId: detail.id,
+        },
+        { skipUserId: actorId }
+    );
+
+    if (detail.status === ComplaintStatus.REJECTED) {
+        await Inbox.notify(
+            tx,
+            [detail.assignedStaff?.id],
+            {
+                type: NotificationType.COMPLAINT_STATUS_CHANGED,
+                title: "Job closed by the city team",
+                body: `${label} was rejected, so it left your list.`,
+                complaintId: detail.id,
+            },
+            { skipUserId: actorId }
+        );
+    }
 };
 
 const closePayments = async (id: string, actorId: string, reason: string, context: IRequestContext) => {
@@ -100,7 +149,11 @@ const changeStatus = async (user: IAuthUser, id: string, payload: TChangeStatusP
             ipAddress: context.ipAddress,
         });
 
-        return getComplaintDetail(tx, id);
+        const detail = await getComplaintDetail(tx, id);
+
+        await notifyStatusChange(tx, detail, user.id);
+
+        return detail;
     });
 
     if (payload.status !== ComplaintStatus.REJECTED) {
@@ -245,7 +298,26 @@ const reopenComplaint = async (user: IAuthUser, id: string, payload: TReopenComp
             ipAddress: context.ipAddress,
         });
 
-        return getComplaintDetail(tx, id);
+        const detail = await getComplaintDetail(tx, id);
+        const label = complaintLabel(detail);
+
+        if (staffIsAvailable && staff) {
+            await Inbox.notify(tx, [staff.id], {
+                type: NotificationType.COMPLAINT_REOPENED,
+                title: "A report came back to you",
+                body: `${label} was reopened by the citizen: ${payload.reason}`,
+                complaintId: id,
+            });
+        } else {
+            await Inbox.notifyAdmins(tx, {
+                type: NotificationType.COMPLAINT_REOPENED,
+                title: "Reopened report needs a staff member",
+                body: `${label} was reopened by the citizen and is waiting in the queue.`,
+                complaintId: id,
+            });
+        }
+
+        return detail;
     });
 };
 
@@ -309,7 +381,23 @@ const transferComplaint = async (user: IAuthUser, id: string, payload: TTransfer
             ipAddress: context.ipAddress,
         });
 
-        return getComplaintDetail(tx, id);
+        const detail = await getComplaintDetail(tx, id);
+        const label = complaintLabel(detail);
+
+        await Inbox.notify(tx, [detail.citizen.id], {
+            type: NotificationType.COMPLAINT_TRANSFERRED,
+            title: "Your report moved to another department",
+            body: `${label} is now handled by ${department.name}.`,
+            complaintId: id,
+        });
+        await Inbox.notify(tx, [complaint.assignedStaffId], {
+            type: NotificationType.COMPLAINT_UNASSIGNED,
+            title: "Job moved to another department",
+            body: `${label} was moved to ${department.name}.`,
+            complaintId: id,
+        });
+
+        return detail;
     });
 };
 
@@ -362,7 +450,16 @@ const submitFeedback = async (user: IAuthUser, id: string, payload: TFeedbackPay
             ipAddress: context.ipAddress,
         });
 
-        return getComplaintDetail(tx, id);
+        const detail = await getComplaintDetail(tx, id);
+
+        await Inbox.notify(tx, [complaint.assignedStaffId], {
+            type: NotificationType.FEEDBACK_RECEIVED,
+            title: `You received a ${payload.rating} star rating`,
+            body: payload.comment ? `${complaintLabel(detail)}. "${payload.comment}"` : complaintLabel(detail),
+            complaintId: id,
+        });
+
+        return detail;
     });
 };
 
