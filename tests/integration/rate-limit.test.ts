@@ -1,5 +1,6 @@
-import { type AddressInfo, createServer } from "node:net";
+import { type AddressInfo, connect, createServer, type Server, type Socket } from "node:net";
 import type { Application } from "express";
+import { Redis } from "ioredis";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, type MockInstance, vi } from "vitest";
 
@@ -124,6 +125,7 @@ describe("when redis is down", () => {
     });
 
     it("keeps serving, reports redis as down and reads from the database", async () => {
+        const started = Date.now();
         const [health, departments, login] = await Promise.all([
             request(down.app).get("/api/v1/health"),
             request(down.app).get("/api/v1/departments"),
@@ -135,16 +137,76 @@ describe("when redis is down", () => {
         expect(departments.status).toBe(200);
         expect(departments.headers["x-cache"]).toBe("MISS");
         expect(login.status).toBe(401);
+        expect(Date.now() - started).toBeLessThan(2500);
         expect(consoleError).toHaveBeenCalledWith(
             "express-rate-limit: error from store, allowing request without rate-limiting.",
             expect.anything()
         );
     });
 
+    it("answers at once instead of waiting for redis to reconnect", async () => {
+        const started = Date.now();
+        const [departments, login] = await Promise.all([request(down.app).get("/api/v1/departments"), failedLogin(down.app)]);
+
+        expect(departments.status).toBe(200);
+        expect(login.status).toBe(401);
+        expect(Date.now() - started).toBeLessThan(800);
+    });
+
     it("survives the reconnect errors", async () => {
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
         expect((await request(down.app).get("/api/v1/health/live")).status).toBe(200);
+    });
+});
+
+describe("when redis comes back after a cold start without it", () => {
+    let late: TLoadedApp;
+    let proxy: Server;
+    let port: number;
+    let consoleError: MockInstance;
+    const sockets: Socket[] = [];
+    const target = new URL(process.env.REDIS_URL || "redis://127.0.0.1:6379");
+
+    beforeAll(async () => {
+        consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        port = await closedPort();
+        late = await loadApp({ REDIS_URL: `redis://127.0.0.1:${port}${target.pathname}`, AUTH_RATE_LIMIT_MAX: "3" });
+    });
+
+    afterAll(async () => {
+        late.redis?.disconnect();
+        for (const socket of sockets) {
+            socket.destroy();
+        }
+        await new Promise((resolve) => proxy?.close(resolve));
+        consoleError.mockRestore();
+    });
+
+    it("allows requests while redis is missing", async () => {
+        expect((await failedLogin(late.app)).status).toBe(401);
+    });
+
+    it("limits again once redis is reachable, even after the scripts were flushed", async () => {
+        const admin = new Redis(target.toString());
+
+        await admin.script("FLUSH");
+        await admin.flushdb();
+        admin.disconnect();
+
+        proxy = createServer((client) => {
+            const upstream = connect(Number(target.port || 6379), target.hostname);
+
+            sockets.push(client, upstream);
+            client.pipe(upstream).pipe(client);
+            client.on("error", () => upstream.destroy());
+            upstream.on("error", () => client.destroy());
+        });
+        await new Promise<void>((resolve) => proxy.listen(port, "127.0.0.1", resolve));
+
+        await vi.waitFor(() => expect(late.redis?.status).toBe("ready"), { timeout: 15000, interval: 200 });
+
+        expect(await statusesOf(4, () => failedLogin(late.app))).toEqual([401, 401, 401, 429]);
     });
 });
 

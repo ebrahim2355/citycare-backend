@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import getRedis from "../lib/redis";
+import { getReadyRedis } from "../lib/redis";
 
 const PREFIX = "citycare:cache:";
 
@@ -12,7 +12,7 @@ export const cacheKeys = {
 };
 
 export const getCache = async <T>(key: string): Promise<T | null> => {
-    const redis = getRedis();
+    const redis = await getReadyRedis();
 
     if (!redis) {
         return null;
@@ -28,7 +28,7 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
 };
 
 export const setCache = async (key: string, value: unknown, ttlSeconds: number) => {
-    const redis = getRedis();
+    const redis = await getReadyRedis();
 
     if (!redis) {
         return;
@@ -42,7 +42,7 @@ export const setCache = async (key: string, value: unknown, ttlSeconds: number) 
 };
 
 export const deleteCache = async (...keys: string[]) => {
-    const redis = getRedis();
+    const redis = await getReadyRedis();
 
     if (!redis || !keys.length) {
         return;
@@ -56,7 +56,7 @@ export const deleteCache = async (...keys: string[]) => {
 };
 
 export const deleteCacheByPrefix = async (prefix: string) => {
-    const redis = getRedis();
+    const redis = await getReadyRedis();
 
     if (!redis) {
         return;

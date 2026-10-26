@@ -6,7 +6,7 @@ import AppError from "../../errors/AppError";
 import { AuthProvider, Prisma, type Role, UserStatus } from "../../generated/prisma/client";
 import getGoogleClient from "../../lib/google";
 import prisma from "../../lib/prisma";
-import getRedis from "../../lib/redis";
+import { getReadyRedis } from "../../lib/redis";
 import type { IRequestContext } from "../../utils/requestContext";
 import { generateToken } from "../../utils/token";
 import { safeUserSelect } from "../user/user.constant";
@@ -241,7 +241,7 @@ const exchangeLoginCode = async (code: string, context: IRequestContext) => {
         );
     }
 
-    const redis = getRedis();
+    const redis = await getReadyRedis();
 
     if (redis) {
         const firstUse = await redis.set(`citycare:login-code:${codeId}`, "1", "EX", LOGIN_CODE_SECONDS + 60, "NX").catch(() => "OK");

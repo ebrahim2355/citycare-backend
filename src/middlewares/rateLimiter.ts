@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import type { Request, Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { StatusCodes } from "http-status-codes";
 import { type RedisReply, RedisStore } from "rate-limit-redis";
 import config from "../config";
-import getRedis from "../lib/redis";
+import getRedis, { getReadyRedis } from "../lib/redis";
 import { getClientIp } from "../utils/clientIp";
 
 const tooManyRequests = (_req: Request, res: Response) => {
@@ -23,7 +24,21 @@ const createStore = (name: string) => {
 
     return new RedisStore({
         prefix: `citycare:ratelimit:${name}:`,
-        sendCommand: (command: string, ...args: string[]) => redis.call(command, ...args) as Promise<RedisReply>,
+        sendCommand: async (command: string, ...args: string[]) => {
+            const ready = await getReadyRedis();
+
+            if (ready) {
+                return ready.call(command, ...args) as Promise<RedisReply>;
+            }
+
+            if (command.toUpperCase() === "SCRIPT" && args[0]?.toUpperCase() === "LOAD") {
+                return createHash("sha1")
+                    .update(args[1] ?? "")
+                    .digest("hex");
+            }
+
+            throw new Error("Redis is not available");
+        },
     });
 };
 
