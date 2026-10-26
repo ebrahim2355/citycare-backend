@@ -19,17 +19,33 @@ interface ILockedStaff {
     departmentId: string | null;
     acceptsAssignments: boolean;
     deletedAt: Date | null;
+    createdAt: Date;
+}
+
+interface ICandidate {
+    staff: ILockedStaff;
+    activeAssignments: number;
 }
 
 const lockStaff = async (tx: Prisma.TransactionClient, staffId: string) => {
     const rows = await tx.$queryRaw<ILockedStaff[]>`
-        SELECT "id", "name", "role", "status", "departmentId", "acceptsAssignments", "deletedAt"
+        SELECT "id", "name", "role", "status", "departmentId", "acceptsAssignments", "deletedAt", "createdAt"
         FROM "users"
         WHERE "id" = ${staffId}
         FOR UPDATE
     `;
 
     return rows[0] ?? null;
+};
+
+const lockDepartmentStaff = (tx: Prisma.TransactionClient, departmentId: string) => {
+    return tx.$queryRaw<ILockedStaff[]>`
+        SELECT "id", "name", "role", "status", "departmentId", "acceptsAssignments", "deletedAt", "createdAt"
+        FROM "users"
+        WHERE "departmentId" = ${departmentId} AND "role" = 'STAFF' AND "deletedAt" IS NULL
+        ORDER BY "id"
+        FOR UPDATE
+    `;
 };
 
 const countActiveAssignments = (tx: Prisma.TransactionClient, staffId: string, ignoreComplaintId: string) => {
@@ -41,30 +57,6 @@ const countActiveAssignments = (tx: Prisma.TransactionClient, staffId: string, i
             id: { not: ignoreComplaintId },
         },
     });
-};
-
-const getCandidatesByWorkload = async (tx: Prisma.TransactionClient, departmentId: string, currentStaffId: string | null) => {
-    const staffMembers = await tx.user.findMany({
-        where: {
-            role: Role.STAFF,
-            status: UserStatus.ACTIVE,
-            acceptsAssignments: true,
-            deletedAt: null,
-            departmentId,
-            ...(currentStaffId ? { id: { not: currentStaffId } } : {}),
-        },
-        select: {
-            id: true,
-            createdAt: true,
-            _count: {
-                select: { assignedComplaints: { where: { status: { in: ACTIVE_ASSIGNMENT_STATUSES }, deletedAt: null } } },
-            },
-        },
-    });
-
-    return staffMembers
-        .sort((a, b) => a._count.assignedComplaints - b._count.assignedComplaints || a.createdAt.getTime() - b.createdAt.getTime())
-        .map((staff) => staff.id);
 };
 
 const getStaffProblem = (staff: ILockedStaff | null, departmentId: string) => {
@@ -87,9 +79,75 @@ const getStaffProblem = (staff: ILockedStaff | null, departmentId: string) => {
     return null;
 };
 
-const assignComplaint = async (admin: IAuthUser, id: string, payload: TAssignComplaintPayload, context: IRequestContext) => {
+const checkChosenStaff = async (
+    tx: Prisma.TransactionClient,
+    staffId: string,
+    departmentId: string,
+    complaintId: string
+): Promise<ICandidate> => {
     const maxActive = config.complaint.maxActiveAssignments;
+    const staff = await lockStaff(tx, staffId);
+    const problem = getStaffProblem(staff, departmentId);
 
+    if (problem || !staff) {
+        throw new AppError(StatusCodes.BAD_REQUEST, "Staff member cannot take this complaint", [
+            { field: "staffId", message: problem ?? "No staff member found with this id" },
+        ]);
+    }
+
+    const activeAssignments = await countActiveAssignments(tx, staff.id, complaintId);
+
+    if (activeAssignments >= maxActive) {
+        throw new AppError(
+            StatusCodes.CONFLICT,
+            "Staff member is at full capacity",
+            `${staff.name} already has ${activeAssignments} active complaints. The limit is ${maxActive}.`
+        );
+    }
+
+    return { staff, activeAssignments };
+};
+
+const pickLeastBusyStaff = async (
+    tx: Prisma.TransactionClient,
+    departmentId: string,
+    currentStaffId: string | null,
+    complaintId: string
+): Promise<ICandidate> => {
+    const available = (await lockDepartmentStaff(tx, departmentId)).filter(
+        (staff) => staff.id !== currentStaffId && !getStaffProblem(staff, departmentId)
+    );
+    const workload = await tx.complaint.groupBy({
+        by: ["assignedStaffId"],
+        where: {
+            assignedStaffId: { in: available.map((staff) => staff.id) },
+            status: { in: ACTIVE_ASSIGNMENT_STATUSES },
+            deletedAt: null,
+            id: { not: complaintId },
+        },
+        _count: { _all: true },
+    });
+    const activeByStaff = new Map(workload.map((row) => [row.assignedStaffId, row._count._all]));
+    const choice = available
+        .map((staff) => ({ staff, activeAssignments: activeByStaff.get(staff.id) ?? 0 }))
+        .filter((candidate) => candidate.activeAssignments < config.complaint.maxActiveAssignments)
+        .sort(
+            (a, b) =>
+                a.activeAssignments - b.activeAssignments || new Date(a.staff.createdAt).getTime() - new Date(b.staff.createdAt).getTime()
+        )[0];
+
+    if (!choice) {
+        throw new AppError(
+            StatusCodes.CONFLICT,
+            "No staff member is available",
+            "Every staff member of this department is at full capacity or the department has no active staff"
+        );
+    }
+
+    return choice;
+};
+
+const assignComplaint = async (admin: IAuthUser, id: string, payload: TAssignComplaintPayload, context: IRequestContext) => {
     return prisma.$transaction(
         async (tx) => {
             const complaint = await lockComplaint(tx, id);
@@ -107,75 +165,42 @@ const assignComplaint = async (admin: IAuthUser, id: string, payload: TAssignCom
             }
 
             const isAutomatic = !payload.staffId;
-            const candidateIds = payload.staffId
-                ? [payload.staffId]
-                : await getCandidatesByWorkload(tx, complaint.departmentId, complaint.assignedStaffId);
+            const choice = payload.staffId
+                ? await checkChosenStaff(tx, payload.staffId, complaint.departmentId, id)
+                : await pickLeastBusyStaff(tx, complaint.departmentId, complaint.assignedStaffId, id);
 
-            for (const candidateId of candidateIds) {
-                const staff = await lockStaff(tx, candidateId);
-                const problem = getStaffProblem(staff, complaint.departmentId);
+            const { staff, activeAssignments } = choice;
 
-                if (problem || !staff) {
-                    if (isAutomatic) {
-                        continue;
-                    }
+            await tx.complaint.update({
+                where: { id },
+                data: { assignedStaffId: staff.id, status: ComplaintStatus.ASSIGNED, assignedAt: new Date() },
+            });
 
-                    throw new AppError(StatusCodes.BAD_REQUEST, "Staff member cannot take this complaint", [
-                        { field: "staffId", message: problem ?? "No staff member found with this id" },
-                    ]);
-                }
-
-                const activeAssignments = await countActiveAssignments(tx, staff.id, id);
-
-                if (activeAssignments >= maxActive) {
-                    if (isAutomatic) {
-                        continue;
-                    }
-
-                    throw new AppError(
-                        StatusCodes.CONFLICT,
-                        "Staff member is at full capacity",
-                        `${staff.name} already has ${activeAssignments} active complaints. The limit is ${maxActive}.`
-                    );
-                }
-
-                await tx.complaint.update({
-                    where: { id },
-                    data: { assignedStaffId: staff.id, status: ComplaintStatus.ASSIGNED, assignedAt: new Date() },
-                });
-
-                await tx.complaintUpdate.create({
-                    data: {
-                        complaintId: id,
-                        actorId: admin.id,
-                        fromStatus: complaint.status,
-                        toStatus: ComplaintStatus.ASSIGNED,
-                        note: payload.note ?? `Assigned to ${staff.name}`,
-                    },
-                });
-
-                await recordAudit(tx, {
+            await tx.complaintUpdate.create({
+                data: {
+                    complaintId: id,
                     actorId: admin.id,
-                    action: AuditAction.COMPLAINT_ASSIGNED,
-                    entityType: AuditEntity.COMPLAINT,
-                    entityId: id,
-                    metadata: {
-                        staffId: staff.id,
-                        previousStaffId: complaint.assignedStaffId,
-                        automatic: isAutomatic,
-                        activeAssignments: activeAssignments + 1,
-                    },
-                    ipAddress: context.ipAddress,
-                });
+                    fromStatus: complaint.status,
+                    toStatus: ComplaintStatus.ASSIGNED,
+                    note: payload.note ?? `Assigned to ${staff.name}`,
+                },
+            });
 
-                return getComplaintDetail(tx, id);
-            }
+            await recordAudit(tx, {
+                actorId: admin.id,
+                action: AuditAction.COMPLAINT_ASSIGNED,
+                entityType: AuditEntity.COMPLAINT,
+                entityId: id,
+                metadata: {
+                    staffId: staff.id,
+                    previousStaffId: complaint.assignedStaffId,
+                    automatic: isAutomatic,
+                    activeAssignments: activeAssignments + 1,
+                },
+                ipAddress: context.ipAddress,
+            });
 
-            throw new AppError(
-                StatusCodes.CONFLICT,
-                "No staff member is available",
-                "Every staff member of this department is at full capacity or the department has no active staff"
-            );
+            return getComplaintDetail(tx, id);
         },
         { timeout: 15000 }
     );
