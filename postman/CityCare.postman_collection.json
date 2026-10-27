@@ -404,7 +404,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"title\": \"Deep pothole in front of the school gate\",\n    \"description\": \"A deep pothole on the main road is causing accidents during school hours.\",\n    \"categoryId\": \"{{categoryId}}\",\n    \"address\": \"Road 8, near Dhanmondi Boys School\",\n    \"area\": \"Dhanmondi\",\n    \"priority\": \"HIGH\"\n}",
+              "raw": "{\n    \"title\": \"Deep pothole in front of the school gate\",\n    \"description\": \"A deep pothole on the main road is causing accidents during school hours.\",\n    \"categoryId\": \"{{categoryId}}\",\n    \"address\": \"Road 8, near Dhanmondi Boys School\",\n    \"area\": \"Dhanmondi\",\n    \"priority\": \"HIGH\",\n    \"latitude\": 23.7461,\n    \"longitude\": 90.3742\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -495,7 +495,92 @@
           "response": []
         },
         {
-          "name": "13 Staff starts the work",
+          "name": "13 Staff sees the new job in the notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/unread-count",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "unread-count"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "14 Citizen sends a message on the complaint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/{{complaintId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "{{complaintId}}",
+                "comments"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"body\": \"The hole is next to the school gate, on the left side.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data) {",
+                  "    pm.collectionVariables.set('commentId', body.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Staff starts the work",
           "request": {
             "method": "PATCH",
             "header": [
@@ -538,7 +623,7 @@
           "response": []
         },
         {
-          "name": "14 Staff resolves it",
+          "name": "16 Staff resolves it",
           "request": {
             "method": "PATCH",
             "header": [
@@ -581,7 +666,48 @@
           "response": []
         },
         {
-          "name": "15 Citizen gives feedback",
+          "name": "17 Citizen reads the notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data) {",
+                  "    if (body.data.length) pm.collectionVariables.set('notificationId', body.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18 Citizen gives feedback",
           "request": {
             "method": "POST",
             "header": [
@@ -624,7 +750,7 @@
           "response": []
         },
         {
-          "name": "16 Citizen creates a paid service request",
+          "name": "19 Citizen creates a paid service request",
           "request": {
             "method": "POST",
             "header": [
@@ -654,7 +780,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"title\": \"Pickup needed for an old sofa and a fridge\",\n    \"description\": \"Two large items need to be collected from the ground floor.\",\n    \"categoryId\": \"{{serviceCategoryId}}\",\n    \"address\": \"Road 8, near Dhanmondi Boys School\",\n    \"area\": \"Dhanmondi\",\n    \"priority\": \"LOW\"\n}",
+              "raw": "{\n    \"title\": \"Pickup needed for an old sofa and a fridge\",\n    \"description\": \"Two large items need to be collected from the ground floor.\",\n    \"categoryId\": \"{{serviceCategoryId}}\",\n    \"address\": \"Road 8, near Dhanmondi Boys School\",\n    \"area\": \"Dhanmondi\",\n    \"priority\": \"LOW\",\n    \"latitude\": 23.7461,\n    \"longitude\": 90.3742\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -679,7 +805,7 @@
           ]
         },
         {
-          "name": "17 Citizen starts the Stripe payment",
+          "name": "20 Citizen starts the Stripe payment",
           "request": {
             "method": "POST",
             "header": [
@@ -738,7 +864,7 @@
           ]
         },
         {
-          "name": "18 Citizen verifies the payment",
+          "name": "21 Citizen verifies the payment",
           "request": {
             "method": "POST",
             "header": [
@@ -780,7 +906,7 @@
           "response": []
         },
         {
-          "name": "19 Citizen sees the payment history",
+          "name": "22 Citizen sees the payment history",
           "request": {
             "method": "GET",
             "header": [],
@@ -807,7 +933,7 @@
           "response": []
         },
         {
-          "name": "20 Role check: citizen opens an admin route (403)",
+          "name": "23 Role check: citizen opens an admin route (403)",
           "request": {
             "method": "GET",
             "header": [],
@@ -846,7 +972,7 @@
           ]
         },
         {
-          "name": "21 Role check: staff creates a department (403)",
+          "name": "24 Role check: staff creates a department (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -898,7 +1024,7 @@
           ]
         },
         {
-          "name": "22 No token (401)",
+          "name": "25 No token (401)",
           "request": {
             "method": "GET",
             "header": [],
@@ -930,7 +1056,7 @@
           ]
         },
         {
-          "name": "23 Validation error (400)",
+          "name": "26 Validation error (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -976,7 +1102,7 @@
           ]
         },
         {
-          "name": "24 Not found (404)",
+          "name": "27 Not found (404)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1015,7 +1141,7 @@
           ]
         },
         {
-          "name": "25 Admin dashboard stats",
+          "name": "28 Admin dashboard stats",
           "request": {
             "method": "GET",
             "header": [],
@@ -1043,7 +1169,7 @@
           "response": []
         },
         {
-          "name": "26 Admin audit logs",
+          "name": "29 Admin audit logs",
           "request": {
             "method": "GET",
             "header": [],
@@ -2622,6 +2748,125 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Get the messages on a complaint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/{{complaintId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "{{complaintId}}",
+                "comments"
+              ]
+            },
+            "description": "Access: Any logged in user. Whoever can open the complaint can read its messages. Citizens do not see the internal notes of the city team.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send a message or an internal note on a complaint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/{{complaintId}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "{{complaintId}}",
+                "comments"
+              ]
+            },
+            "description": "Access: Any logged in user. Staff and admins can set internal to true for a note the citizen does not see. The other people on the complaint get a notification.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"body\": \"The crew will come tomorrow morning. Please keep the gate open.\",\n    \"internal\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data) {",
+                  "    pm.collectionVariables.set('commentId', body.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove a message",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/{{complaintId}}/comments/{{commentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "{{complaintId}}",
+                "comments",
+                "{{commentId}}"
+              ]
+            },
+            "description": "Access: Any logged in user. The author can remove a message within 15 minutes. An admin can remove any message.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -2920,6 +3165,158 @@
                 {
                   "key": "token",
                   "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List own notifications, newest first",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "unread",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: Any logged in user. Created when a complaint is assigned, changes status, gets a comment, a rating or a payment, or misses its deadline.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data) {",
+                  "    if (body.data.length) pm.collectionVariables.set('notificationId', body.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Count own unread notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/unread-count",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "unread-count"
+              ]
+            },
+            "description": "Access: Any logged in user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark all own notifications as read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "Access: Any logged in user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark one notification as read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            },
+            "description": "Access: Any logged in user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
                   "type": "string"
                 }
               ]
@@ -3587,7 +3984,29 @@
                 "health"
               ]
             },
-            "description": "Access: Public.",
+            "description": "Access: Public. Answers 503 when the database is not reachable, so it can be used as a readiness probe.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check that the API process is running",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": "Access: Public. Does not touch the database. Use it as a liveness probe.",
             "auth": {
               "type": "noauth"
             }
@@ -3659,6 +4078,10 @@
       "value": ""
     },
     {
+      "key": "commentId",
+      "value": ""
+    },
+    {
       "key": "paymentId",
       "value": ""
     },
@@ -3668,6 +4091,10 @@
     },
     {
       "key": "messageId",
+      "value": ""
+    },
+    {
+      "key": "notificationId",
       "value": ""
     }
   ]

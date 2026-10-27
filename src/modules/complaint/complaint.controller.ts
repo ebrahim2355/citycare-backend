@@ -7,6 +7,7 @@ import { NotificationService } from "../notification/notification.service";
 import type { TRefundResult } from "../payment/payment.refund";
 import { ComplaintAssignment } from "./complaint.assignment";
 import { ComplaintAttachmentService } from "./complaint.attachment";
+import { ComplaintComment } from "./complaint.comment";
 import { ComplaintService } from "./complaint.service";
 import { ComplaintWorkflow } from "./complaint.workflow";
 
@@ -145,6 +146,35 @@ const submitFeedback = catchAsync(async (req, res) => {
     });
 });
 
+const getComments = catchAsync(async (req, res) => {
+    const result = await ComplaintComment.getComments(currentUser(req), req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Messages retrieved successfully",
+        data: result,
+    });
+});
+
+const addComment = catchAsync(async (req, res) => {
+    const result = await ComplaintComment.addComment(currentUser(req), req.params.id as string, req.body);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.CREATED,
+        message: result.isInternal ? "Internal note added" : "Message sent",
+        data: result,
+    });
+});
+
+const removeComment = catchAsync(async (req, res) => {
+    await ComplaintComment.removeComment(currentUser(req), req.params.id as string, req.params.commentId as string, getRequestContext(req));
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Message removed",
+    });
+});
+
 const addAttachments = catchAsync(async (req, res) => {
     const files = Array.isArray(req.files) ? req.files : [];
     const result = await ComplaintAttachmentService.addAttachments(
@@ -176,6 +206,9 @@ const removeAttachment = catchAsync(async (req, res) => {
 });
 
 export const ComplaintController = {
+    getComments,
+    addComment,
+    removeComment,
     addAttachments,
     removeAttachment,
     submitFeedback,

@@ -54,6 +54,7 @@ model User {
   attachments        ComplaintAttachment[]
   contactReplies     ContactMessage[]
   notifications      Notification[]
+  comments           ComplaintComment[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -205,6 +206,7 @@ model Complaint {
   payments      Payment[]
   attachments   ComplaintAttachment[]
   notifications Notification[]
+  comments      ComplaintComment[]
 
   @@index([citizenId, status])
   @@index([assignedStaffId, status])
@@ -378,4 +380,21 @@ model Notification {
   @@index([userId, readAt])
   @@index([readAt, createdAt])
   @@map("notifications")
+}
+
+model ComplaintComment {
+  id          String    @id @default(uuid())
+  complaintId String
+  authorId    String?
+  body        String
+  isInternal  Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  author    User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([complaintId, createdAt])
+  @@index([authorId])
+  @@map("complaint_comments")
 }

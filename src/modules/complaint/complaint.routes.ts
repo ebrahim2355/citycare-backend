@@ -51,6 +51,14 @@ router.post(
     ComplaintController.transferComplaint
 );
 router.post("/:id/feedback", auth(Role.CITIZEN), validateRequest(ComplaintValidation.feedbackSchema), ComplaintController.submitFeedback);
+router.get("/:id/comments", auth(), validateRequest(idParamSchema), ComplaintController.getComments);
+router.post("/:id/comments", auth(), validateRequest(ComplaintValidation.addCommentSchema), ComplaintController.addComment);
+router.delete(
+    "/:id/comments/:commentId",
+    auth(),
+    validateRequest(ComplaintValidation.commentParamSchema),
+    ComplaintController.removeComment
+);
 router.post("/:id/attachments", auth(), validateRequest(idParamSchema), uploadImages, ComplaintController.addAttachments);
 router.delete(
     "/:id/attachments/:attachmentId",
