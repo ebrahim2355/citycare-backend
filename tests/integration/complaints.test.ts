@@ -275,19 +275,14 @@ describe("details and tracking", () => {
             isOverdue: false,
             category: { name: "Pothole" },
             department: { name: "Roads & Transport" },
+            id: free.id,
+            isPublic: true,
+            latitude: 23.8,
+            longitude: 90.36,
+            supportCount: 0,
         });
         expect(res.body.data.updates).toEqual([{ fromStatus: null, toStatus: "SUBMITTED", createdAt: expect.any(String) }]);
-        for (const field of [
-            "id",
-            "citizen",
-            "assignedStaff",
-            "description",
-            "address",
-            "latitude",
-            "longitude",
-            "attachments",
-            "payments",
-        ]) {
+        for (const field of ["citizen", "citizenId", "assignedStaff", "description", "address", "attachments", "payments"]) {
             expect(res.body.data, field).not.toHaveProperty(field);
         }
         expect(text).not.toContain(citizen.email);

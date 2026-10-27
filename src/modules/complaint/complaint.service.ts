@@ -4,6 +4,7 @@ import { CategoryType, ComplaintPaymentStatus, ComplaintStatus, NotificationType
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
 import { recordAudit } from "../../utils/auditLog";
+import { roundCoordinate } from "../../utils/geo";
 import { getMeta, getPagination } from "../../utils/pagination";
 import type { IRequestContext } from "../../utils/requestContext";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
@@ -67,6 +68,7 @@ const createComplaint = async (user: IAuthUser, payload: TCreateComplaintPayload
                         priority: payload.priority,
                         latitude: payload.latitude ?? null,
                         longitude: payload.longitude ?? null,
+                        isPublic: category.type === CategoryType.COMPLAINT && (payload.isPublic ?? true),
                         type: category.type,
                         fee: category.fee,
                         status: requiresPayment ? ComplaintStatus.PENDING_PAYMENT : ComplaintStatus.SUBMITTED,
@@ -205,10 +207,13 @@ const getComplaints = async (user: IAuthUser, query: TComplaintQuery) => {
     const where = buildComplaintFilters(user, query);
     const sortBy = query.sortBy ?? "createdAt";
 
-    const orderBy: Prisma.ComplaintOrderByWithRelationInput[] = [
-        sortBy === "dueAt" ? { dueAt: { sort: sortOrder, nulls: "last" } } : { [sortBy]: sortOrder },
-        { id: "asc" },
-    ];
+    const firstOrder: Prisma.ComplaintOrderByWithRelationInput =
+        sortBy === "dueAt"
+            ? { dueAt: { sort: sortOrder, nulls: "last" } }
+            : sortBy === "supportCount"
+              ? { supports: { _count: sortOrder } }
+              : { [sortBy]: sortOrder };
+    const orderBy: Prisma.ComplaintOrderByWithRelationInput[] = [firstOrder, { id: "asc" }];
 
     const [complaints, total] = await prisma.$transaction([
         prisma.complaint.findMany({ where, select: complaintListSelect, orderBy, skip, take: limit }),
@@ -240,12 +245,17 @@ const trackComplaint = async (trackingCode: string) => {
     const complaint = await prisma.complaint.findFirst({
         where: { trackingCode: trackingCode.toUpperCase(), deletedAt: null },
         select: {
+            id: true,
             trackingCode: true,
             title: true,
             type: true,
             priority: true,
             status: true,
             area: true,
+            isPublic: true,
+            latitude: true,
+            longitude: true,
+            _count: { select: { supports: true } },
             submittedAt: true,
             dueAt: true,
             resolvedAt: true,
@@ -264,13 +274,20 @@ const trackComplaint = async (trackingCode: string) => {
         throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this tracking code");
     }
 
-    return withOverdue(complaint);
+    const visible = complaint.isPublic && complaint.latitude !== null && complaint.longitude !== null;
+
+    return withOverdue({
+        ...complaint,
+        id: complaint.isPublic ? complaint.id : null,
+        latitude: visible && complaint.latitude !== null ? roundCoordinate(complaint.latitude) : null,
+        longitude: visible && complaint.longitude !== null ? roundCoordinate(complaint.longitude) : null,
+    });
 };
 
 const updateComplaint = async (user: IAuthUser, id: string, payload: TUpdateComplaintPayload, context: IRequestContext) => {
     const complaint = await prisma.complaint.findFirst({
         where: { id, deletedAt: null },
-        select: { id: true, citizenId: true, status: true, priority: true },
+        select: { id: true, citizenId: true, status: true, priority: true, type: true },
     });
 
     if (!complaint) {
@@ -282,7 +299,15 @@ const updateComplaint = async (user: IAuthUser, id: string, payload: TUpdateComp
             throw new AppError(StatusCodes.FORBIDDEN, "Forbidden access", "You can only edit your own complaints");
         }
 
-        if (!CITIZEN_EDITABLE_STATUSES.includes(complaint.status)) {
+        if (payload.isPublic && complaint.type === CategoryType.SERVICE) {
+            throw new AppError(StatusCodes.BAD_REQUEST, "Validation failed", [
+                { field: "isPublic", message: "A home service request is always private" },
+            ]);
+        }
+
+        const onlyVisibility = Object.keys(payload).every((field) => field === "isPublic");
+
+        if (!onlyVisibility && !CITIZEN_EDITABLE_STATUSES.includes(complaint.status)) {
             throw new AppError(
                 StatusCodes.CONFLICT,
                 "Complaint can no longer be edited",

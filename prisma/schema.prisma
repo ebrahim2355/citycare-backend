@@ -55,6 +55,7 @@ model User {
   contactReplies     ContactMessage[]
   notifications      Notification[]
   comments           ComplaintComment[]
+  supports           ComplaintSupport[]
 
   @@index([role, status])
   @@index([departmentId])
@@ -193,6 +194,7 @@ model Complaint {
   resolutionNote  String?
   rejectionReason String?
   reopenCount     Int                    @default(0)
+  isPublic        Boolean                @default(false)
   deletedAt       DateTime?
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
@@ -207,6 +209,7 @@ model Complaint {
   attachments   ComplaintAttachment[]
   notifications Notification[]
   comments      ComplaintComment[]
+  supports      ComplaintSupport[]
 
   @@index([citizenId, status])
   @@index([assignedStaffId, status])
@@ -216,6 +219,8 @@ model Complaint {
   @@index([area])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([isPublic, status])
+  @@index([latitude, longitude])
   @@map("complaints")
 }
 
@@ -361,6 +366,7 @@ enum NotificationType {
   PAYMENT_RECEIVED
   PAYMENT_REFUNDED
   SLA_BREACHED
+  REPORT_SUPPORTED
 }
 
 model Notification {
@@ -397,4 +403,17 @@ model ComplaintComment {
   @@index([complaintId, createdAt])
   @@index([authorId])
   @@map("complaint_comments")
+}
+
+model ComplaintSupport {
+  complaintId String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([complaintId, userId])
+  @@index([userId])
+  @@map("complaint_supports")
 }

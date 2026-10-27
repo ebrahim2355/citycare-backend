@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { currentUser } from "../../middlewares/auth";
+import { setCacheHeader } from "../../utils/cache";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
@@ -8,6 +9,7 @@ import type { TRefundResult } from "../payment/payment.refund";
 import { ComplaintAssignment } from "./complaint.assignment";
 import { ComplaintAttachmentService } from "./complaint.attachment";
 import { ComplaintComment } from "./complaint.comment";
+import { ComplaintCommunity } from "./complaint.community";
 import { ComplaintService } from "./complaint.service";
 import { ComplaintWorkflow } from "./complaint.workflow";
 
@@ -146,6 +148,57 @@ const submitFeedback = catchAsync(async (req, res) => {
     });
 });
 
+const getPublicReports = catchAsync(async (_req, res) => {
+    const result = await ComplaintCommunity.getPublicReports(res.locals.query);
+
+    setCacheHeader(res, result.cached);
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Public reports retrieved successfully",
+        data: result.data,
+    });
+});
+
+const getNearbyReports = catchAsync(async (req, res) => {
+    const result = await ComplaintCommunity.getNearbyReports(currentUser(req), res.locals.query);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Nearby reports retrieved successfully",
+        data: result,
+    });
+});
+
+const getMapComplaints = catchAsync(async (req, res) => {
+    const result = await ComplaintCommunity.getMapComplaints(currentUser(req), res.locals.query);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Map complaints retrieved successfully",
+        data: result,
+    });
+});
+
+const supportComplaint = catchAsync(async (req, res) => {
+    const result = await ComplaintCommunity.supportComplaint(currentUser(req), req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Thanks for your support",
+        data: result,
+    });
+});
+
+const withdrawSupport = catchAsync(async (req, res) => {
+    const result = await ComplaintCommunity.withdrawSupport(currentUser(req), req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Support withdrawn",
+        data: result,
+    });
+});
+
 const getComments = catchAsync(async (req, res) => {
     const result = await ComplaintComment.getComments(currentUser(req), req.params.id as string);
 
@@ -206,6 +259,11 @@ const removeAttachment = catchAsync(async (req, res) => {
 });
 
 export const ComplaintController = {
+    getPublicReports,
+    getNearbyReports,
+    getMapComplaints,
+    supportComplaint,
+    withdrawSupport,
     getComments,
     addComment,
     removeComment,

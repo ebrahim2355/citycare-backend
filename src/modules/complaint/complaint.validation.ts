@@ -35,7 +35,11 @@ const complaintFields = {
         .number("longitude must be a number")
         .min(-180, "longitude must be between -180 and 180")
         .max(180, "longitude must be between -180 and 180"),
+    isPublic: z.boolean("isPublic must be true or false"),
 };
+
+const queryLatitude = z.coerce.number("latitude must be a number").min(-90, "latitude must be between -90 and 90").max(90);
+const queryLongitude = z.coerce.number("longitude must be a number").min(-180, "longitude must be between -180 and 180").max(180);
 
 const hasBothCoordinates = (body: { latitude?: number | undefined; longitude?: number | undefined }) => {
     return (body.latitude === undefined) === (body.longitude === undefined);
@@ -52,6 +56,7 @@ const createComplaintSchema = z.object({
             priority: complaintFields.priority.default("MEDIUM"),
             latitude: complaintFields.latitude.optional(),
             longitude: complaintFields.longitude.optional(),
+            isPublic: complaintFields.isPublic.optional(),
         })
         .refine(hasBothCoordinates, { path: ["longitude"], message: "Send latitude and longitude together" }),
 });
@@ -62,8 +67,8 @@ const complaintQuerySchema = z.object({
             ...paginationFields,
             sortBy: z
                 .enum(
-                    ["createdAt", "updatedAt", "dueAt", "priority", "status"],
-                    "sortBy must be createdAt, updatedAt, dueAt, priority or status"
+                    ["createdAt", "updatedAt", "dueAt", "priority", "status", "supportCount"],
+                    "sortBy must be createdAt, updatedAt, dueAt, priority, status or supportCount"
                 )
                 .optional(),
             status: z.enum(statuses, "status is not valid").optional(),
@@ -107,6 +112,7 @@ const updateComplaintSchema = z.object({
             priority: complaintFields.priority.optional(),
             latitude: complaintFields.latitude.optional(),
             longitude: complaintFields.longitude.optional(),
+            isPublic: complaintFields.isPublic.optional(),
         })
         .refine((body) => Object.keys(body).length > 0, "Send at least one field to update")
         .refine(hasBothCoordinates, { path: ["longitude"], message: "Send latitude and longitude together" }),
@@ -198,6 +204,59 @@ const attachmentParamSchema = z.object({
     }),
 });
 
+const hasWholeBox = (query: { minLat?: number; maxLat?: number; minLng?: number; maxLng?: number }) => {
+    const values = [query.minLat, query.maxLat, query.minLng, query.maxLng];
+
+    return values.every((value) => value === undefined) || values.every((value) => value !== undefined);
+};
+
+const publicReportsQuerySchema = z.object({
+    query: z
+        .object({
+            status: z.enum(["OPEN", "RESOLVED", "ALL"], "status must be OPEN, RESOLVED or ALL").optional(),
+            categoryId: uuidSchema("categoryId").optional(),
+            departmentId: uuidSchema("departmentId").optional(),
+            minLat: queryLatitude.optional(),
+            maxLat: queryLatitude.optional(),
+            minLng: queryLongitude.optional(),
+            maxLng: queryLongitude.optional(),
+            limit: z.coerce
+                .number("limit must be a number")
+                .int()
+                .min(1, "limit must be at least 1")
+                .max(500, "limit cannot be more than 500")
+                .optional(),
+        })
+        .refine(hasWholeBox, { path: ["minLat"], message: "Send minLat, maxLat, minLng and maxLng together" }),
+});
+
+const nearbyQuerySchema = z.object({
+    query: z.object({
+        latitude: queryLatitude,
+        longitude: queryLongitude,
+        radius: z.coerce
+            .number("radius must be a number")
+            .int()
+            .min(50, "radius must be at least 50 meters")
+            .max(2000, "radius cannot be more than 2000 meters")
+            .optional(),
+        categoryId: uuidSchema("categoryId").optional(),
+    }),
+});
+
+const mapQuerySchema = z.object({
+    query: z.object({
+        status: z.enum(["OPEN", "ALL"], "status must be OPEN or ALL").optional(),
+        departmentId: uuidSchema("departmentId").optional(),
+        limit: z.coerce
+            .number("limit must be a number")
+            .int()
+            .min(1, "limit must be at least 1")
+            .max(1000, "limit cannot be more than 1000")
+            .optional(),
+    }),
+});
+
 const addCommentSchema = z.object({
     params: z.object({ id: uuidSchema() }),
     body: z.object({
@@ -219,6 +278,9 @@ const commentParamSchema = z.object({
 
 export type TCreateComplaintPayload = z.infer<typeof createComplaintSchema>["body"];
 export type TAddCommentPayload = z.infer<typeof addCommentSchema>["body"];
+export type TPublicReportsQuery = z.infer<typeof publicReportsQuerySchema>["query"];
+export type TNearbyQuery = z.infer<typeof nearbyQuerySchema>["query"];
+export type TMapQuery = z.infer<typeof mapQuerySchema>["query"];
 export type TFeedbackPayload = z.infer<typeof feedbackSchema>["body"];
 export type TComplaintQuery = z.infer<typeof complaintQuerySchema>["query"];
 export type TUpdateComplaintPayload = z.infer<typeof updateComplaintSchema>["body"];
@@ -242,6 +304,9 @@ export const ComplaintValidation = {
     attachmentParamSchema,
     addCommentSchema,
     commentParamSchema,
+    publicReportsQuerySchema,
+    nearbyQuerySchema,
+    mapQuerySchema,
 };
 
 export const complaintValidationParts = {

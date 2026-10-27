@@ -12,6 +12,9 @@ const router = Router();
 router.post("/", auth(Role.CITIZEN), validateRequest(ComplaintValidation.createComplaintSchema), ComplaintController.createComplaint);
 router.get("/", auth(), validateRequest(ComplaintValidation.complaintQuerySchema), ComplaintController.getComplaints);
 router.get("/track/:trackingCode", validateRequest(ComplaintValidation.trackingCodeSchema), ComplaintController.trackComplaint);
+router.get("/public", validateRequest(ComplaintValidation.publicReportsQuerySchema), ComplaintController.getPublicReports);
+router.get("/nearby", auth(), validateRequest(ComplaintValidation.nearbyQuerySchema), ComplaintController.getNearbyReports);
+router.get("/map", auth(), validateRequest(ComplaintValidation.mapQuerySchema), ComplaintController.getMapComplaints);
 router.get("/:id", auth(), validateRequest(idParamSchema), ComplaintController.getComplaintById);
 router.patch(
     "/:id",
@@ -51,6 +54,8 @@ router.post(
     ComplaintController.transferComplaint
 );
 router.post("/:id/feedback", auth(Role.CITIZEN), validateRequest(ComplaintValidation.feedbackSchema), ComplaintController.submitFeedback);
+router.post("/:id/support", auth(Role.CITIZEN), validateRequest(idParamSchema), ComplaintController.supportComplaint);
+router.delete("/:id/support", auth(Role.CITIZEN), validateRequest(idParamSchema), ComplaintController.withdrawSupport);
 router.get("/:id/comments", auth(), validateRequest(idParamSchema), ComplaintController.getComments);
 router.post("/:id/comments", auth(), validateRequest(ComplaintValidation.addCommentSchema), ComplaintController.addComment);
 router.delete(

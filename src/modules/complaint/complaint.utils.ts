@@ -23,8 +23,10 @@ export const isOverdue = (complaint: { status: ComplaintStatus; dueAt: Date | nu
     return Boolean(complaint.dueAt && complaint.dueAt < now && OPEN_STATUSES.includes(complaint.status));
 };
 
-export const withOverdue = <T extends { status: ComplaintStatus; dueAt: Date | null }>(complaint: T) => {
-    return { ...complaint, isOverdue: isOverdue(complaint) };
+export const withOverdue = <T extends { status: ComplaintStatus; dueAt: Date | null; _count?: { supports: number } }>(complaint: T) => {
+    const { _count, ...rest } = complaint;
+
+    return { ...rest, isOverdue: isOverdue(complaint), ...(_count ? { supportCount: _count.supports } : {}) };
 };
 
 export interface ILockedComplaint {

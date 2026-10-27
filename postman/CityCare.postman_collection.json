@@ -2130,7 +2130,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"title\": \"Deep pothole in front of the school gate\",\n    \"description\": \"A deep pothole on the main road is causing accidents during school hours.\",\n    \"categoryId\": \"{{categoryId}}\",\n    \"address\": \"Road 8, near Dhanmondi Boys School\",\n    \"area\": \"Dhanmondi\",\n    \"priority\": \"HIGH\",\n    \"latitude\": 23.7461,\n    \"longitude\": 90.3742\n}",
+              "raw": "{\n    \"title\": \"Deep pothole in front of the school gate\",\n    \"description\": \"A deep pothole on the main road is causing accidents during school hours.\",\n    \"categoryId\": \"{{categoryId}}\",\n    \"address\": \"Road 8, near Dhanmondi Boys School\",\n    \"area\": \"Dhanmondi\",\n    \"priority\": \"HIGH\",\n    \"latitude\": 23.7461,\n    \"longitude\": 90.3742,\n    \"isPublic\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2291,7 +2291,7 @@
                 "{{trackingCode}}"
               ]
             },
-            "description": "Access: Public. Shows the status and the timeline only. No personal data.",
+            "description": "Access: Public. Shows the status and the timeline. No personal data. A report its citizen made public also shows its id, a rounded location and the number of supporters.",
             "auth": {
               "type": "noauth"
             }
@@ -2750,6 +2750,52 @@
           "response": []
         },
         {
+          "name": "Get complaints that have a location, for a map",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/map",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "map"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "departmentId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: Any logged in user. An admin sees every complaint, a staff member the assigned jobs and a citizen their own reports. Open ones by default.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get the messages on a complaint",
           "request": {
             "method": "GET",
@@ -2855,6 +2901,186 @@
               ]
             },
             "description": "Access: Any logged in user. The author can remove a message within 15 minutes. An admin can remove any message.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Community",
+      "item": [
+        {
+          "name": "List public reports for the city map",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/public",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "public"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "categoryId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "departmentId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "minLat",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "maxLat",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "minLng",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "maxLng",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: Public. Open or recently resolved complaints that their citizen made public and that have a location. No personal data, coordinates rounded to about 10 meters. Cached for one minute.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Find open public reports near a spot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/nearby",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "longitude",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "radius",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "categoryId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: Any logged in user. The report wizard uses it to show possible duplicates before a new report is sent. Up to 5 reports, closest first.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Support a public report that affects you too",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/{{complaintId}}/support",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "{{complaintId}}",
+                "support"
+              ]
+            },
+            "description": "Access: Citizen. Sending it twice changes nothing. The owner is told at 1, 5, 10, 25, 50 and 100 supporters.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{citizenToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Withdraw your support",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/complaints/{{complaintId}}/support",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "complaints",
+                "{{complaintId}}",
+                "support"
+              ]
+            },
+            "description": "Access: Citizen.",
             "auth": {
               "type": "bearer",
               "bearer": [
