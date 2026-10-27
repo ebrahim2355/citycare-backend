@@ -33,7 +33,7 @@ const lockStaff = async (tx: Prisma.TransactionClient, staffId: string) => {
         SELECT "id", "name", "role", "status", "departmentId", "acceptsAssignments", "deletedAt", "createdAt"
         FROM "users"
         WHERE "id" = ${staffId}
-        FOR UPDATE
+        FOR NO KEY UPDATE
     `;
 
     return rows[0] ?? null;
@@ -45,7 +45,7 @@ const lockDepartmentStaff = (tx: Prisma.TransactionClient, departmentId: string)
         FROM "users"
         WHERE "departmentId" = ${departmentId} AND "role" = 'STAFF' AND "deletedAt" IS NULL
         ORDER BY "id"
-        FOR UPDATE
+        FOR NO KEY UPDATE
     `;
 };
 

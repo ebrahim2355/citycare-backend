@@ -1,7 +1,17 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { ComplaintStatus, Role, UserStatus } from "../../src/generated/prisma/client";
 import { prisma, resetDatabase } from "../helpers/db";
-import { createCity, createUser, type ITestUser, MISSING_ID, moveStatus, resolveComplaint, submitComplaint } from "../helpers/factories";
+import {
+    createCategory,
+    createCity,
+    createDepartment,
+    createUser,
+    type ITestUser,
+    MISSING_ID,
+    moveStatus,
+    resolveComplaint,
+    submitComplaint,
+} from "../helpers/factories";
 import { hasFieldError, http } from "../helpers/http";
 
 interface IComplaint {
@@ -317,5 +327,38 @@ describe("audit trail", () => {
             entityId: moved.id,
             metadata: { fromDepartmentId: roads.id, toDepartmentId: waste.id, previousStaffId: staff3.id },
         });
+    });
+});
+
+describe("reassignment next to an automatic assignment", () => {
+    let lawn: { id: string };
+    let gardenerOne: ITestUser;
+    let gardenerTwo: ITestUser;
+
+    beforeAll(async () => {
+        const parks = await createDepartment("Parks & Gardens");
+
+        lawn = await createCategory(parks.id, { name: "Overgrown lawn", slaHours: 48 });
+        gardenerOne = await createUser({ role: Role.STAFF, name: "Gardener One", departmentId: parks.id });
+        gardenerTwo = await createUser({ role: Role.STAFF, name: "Gardener Two", departmentId: parks.id });
+    });
+
+    it("never deadlocks, whichever staff member has the lower id", async () => {
+        for (const [from, to] of [
+            [gardenerOne, gardenerTwo],
+            [gardenerTwo, gardenerOne],
+            [gardenerOne, gardenerTwo],
+            [gardenerTwo, gardenerOne],
+        ] as const) {
+            const moving = await submitComplaint(citizen, lawn.id, { title: "The lawn in the park needs mowing" });
+            const waiting = await submitComplaint(citizen2, lawn.id, { title: "Grass is knee high near the pond" });
+
+            expect((await assign(moving.id, { staffId: from.id })).status).toBe(200);
+
+            const results = await Promise.all([assign(moving.id, { staffId: to.id }), assign(waiting.id)]);
+
+            expect(results.map((res) => res.status)).toEqual([200, 200]);
+            await prisma.complaint.updateMany({ where: { id: { in: [moving.id, waiting.id] } }, data: { status: ComplaintStatus.CLOSED } });
+        }
     });
 });
