@@ -1,7 +1,8 @@
 import { NotificationType, Priority } from "../../generated/prisma/client";
+import logger from "../../lib/logger";
 import prisma from "../../lib/prisma";
 import { recordAudit } from "../../utils/auditLog";
-import { deleteCacheByPrefix } from "../../utils/cache";
+import { deleteCacheByPrefix, invalidatePublicReports } from "../../utils/cache";
 import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { OPEN_STATUSES } from "./complaint.constant";
@@ -19,7 +20,11 @@ const NEXT_PRIORITY: Record<Priority, Priority> = {
 
 const escalateComplaint = (id: string, now: Date) => {
     return prisma.$transaction(async (tx) => {
-        await lockComplaint(tx, id);
+        const locked = await lockComplaint(tx, id, { includeDeleted: true });
+
+        if (locked.deletedAt) {
+            return false;
+        }
 
         const complaint = await tx.complaint.findUniqueOrThrow({
             where: { id },
@@ -82,10 +87,16 @@ const runSlaCheck = async (now = new Date()) => {
     });
 
     let escalated = 0;
+    let failed = 0;
 
     for (const { id } of overdue) {
-        if (await escalateComplaint(id, now)) {
-            escalated++;
+        try {
+            if (await escalateComplaint(id, now)) {
+                escalated++;
+            }
+        } catch (error) {
+            failed++;
+            logger.error({ err: error, complaintId: id }, "Escalation failed");
         }
     }
 
@@ -94,10 +105,10 @@ const runSlaCheck = async (now = new Date()) => {
     });
 
     if (escalated) {
-        await deleteCacheByPrefix("stats:");
+        await Promise.all([deleteCacheByPrefix("stats:"), invalidatePublicReports()]);
     }
 
-    return { checked: overdue.length, escalated, prunedNotifications: pruned.count, ranAt: now };
+    return { checked: overdue.length, escalated, failed, prunedNotifications: pruned.count, ranAt: now };
 };
 
 export const ComplaintEscalation = {

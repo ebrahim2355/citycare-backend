@@ -24,6 +24,14 @@ const setDue = (id: string, hoursFromNow: number, extra: Record<string, unknown>
 
 const cron = () => http(undefined, CRON).get("/jobs/sla-check");
 
+const lockWaits = async () => {
+    const [row] = await prisma.$queryRaw<{ waiting: bigint }[]>`
+        SELECT count(*) AS "waiting" FROM pg_stat_activity WHERE "wait_event_type" = 'Lock' AND "datname" = current_database()
+    `;
+
+    return Number(row?.waiting ?? 0);
+};
+
 beforeAll(async () => {
     await resetDatabase();
     city = await createCity();
@@ -153,6 +161,60 @@ describe("after the check", () => {
         expect(res.body.data.prunedNotifications).toBe(1);
         expect(titles).toContain("Old but unread");
         expect(titles).not.toContain("Old and read");
+    });
+});
+
+describe("a batch with a problem", () => {
+    it("skips a complaint removed while the check waits for it and escalates the rest", async () => {
+        const removed = await submitComplaint(city.citizen, city.pothole.id, { title: "Hole removed during the check" });
+        const next = await submitComplaint(city.citizen2, city.pothole.id, { title: "Hole that still needs a flag" });
+        let running: Promise<Awaited<ReturnType<typeof cron>>> | undefined;
+
+        await setDue(removed.id, -50);
+        await setDue(next.id, -4);
+        await prisma.$transaction(
+            async (tx) => {
+                await tx.$queryRaw`SELECT "id" FROM "complaints" WHERE "id" = ${removed.id} FOR UPDATE`;
+                running = cron().then((res) => res);
+                await expect.poll(lockWaits, { timeout: 10000 }).toBeGreaterThan(0);
+                await tx.complaint.update({ where: { id: removed.id }, data: { deletedAt: new Date() } });
+            },
+            { timeout: 20000 }
+        );
+
+        const res = await running;
+
+        expect(res?.status).toBe(200);
+        expect(res?.body.data).toMatchObject({ checked: 2, escalated: 1, failed: 0 });
+        expect((await prisma.complaint.findUniqueOrThrow({ where: { id: next.id } })).escalatedAt).toEqual(expect.any(Date));
+    });
+
+    it("counts a complaint that fails and still escalates the others", async () => {
+        const broken = await submitComplaint(city.citizen, city.pothole.id, { title: "Hole the database chokes on" });
+        const fine = await submitComplaint(city.citizen2, city.pothole.id, { title: "Hole that is simply late" });
+
+        await setDue(broken.id, -60);
+        await setDue(fine.id, -2);
+
+        const spy = vi.spyOn(prisma, "$transaction").mockRejectedValueOnce(new Error("Connection lost"));
+
+        try {
+            const res = await cron();
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toMatchObject({ checked: 2, escalated: 1, failed: 1 });
+        } finally {
+            spy.mockRestore();
+        }
+
+        const rows = await prisma.complaint.findMany({
+            where: { id: { in: [broken.id, fine.id] } },
+            select: { id: true, escalatedAt: true },
+        });
+        const byId = Object.fromEntries(rows.map((row) => [row.id, row.escalatedAt]));
+
+        expect(byId[broken.id]).toBeNull();
+        expect(byId[fine.id]).toEqual(expect.any(Date));
     });
 });
 
