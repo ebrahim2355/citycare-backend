@@ -13,5 +13,5 @@
         "noEmit": true,
         "allowImportingTsExtensions": true
     },
-    "include": ["src", "prisma", "tests", "*.ts"]
+    "include": ["src", "prisma", "tests", "scripts", "*.ts"]
 }

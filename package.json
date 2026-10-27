@@ -19,7 +19,8 @@
         "test:coverage": "vitest run --coverage",
         "migrate": "prisma migrate dev",
         "migrate:deploy": "prisma migrate deploy",
-        "seed": "tsx prisma/seed.ts"
+        "seed": "tsx prisma/seed.ts",
+        "docs:postman": "tsx scripts/generate-postman.ts"
     },
     "keywords": [],
     "author": "",
