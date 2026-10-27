@@ -5,6 +5,8 @@ import getRedis from "../src/lib/redis";
 import { addHours, generateTrackingCode } from "../src/modules/complaint/complaint.utils";
 import { invalidateCatalogCache } from "../src/utils/cache";
 import { hashPassword } from "../src/utils/password";
+import { seedCommunity } from "./seed-community";
+import { pointNear } from "./seed-geo";
 import { buildHistory, historyCitizens, type ISampleComplaint } from "./seed-history";
 
 const departments = [
@@ -103,6 +105,18 @@ const sampleComplaints: ISampleComplaint[] = [
         citizen: "citizen2@citycare.com",
         staff: "lights.staff@citycare.com",
         daysAgo: 2,
+    },
+    {
+        title: "Large pothole slowing down the bus route",
+        description: "A large pothole in the left lane makes every bus stop and swerve near the roundabout.",
+        category: "Pothole",
+        area: "Mirpur",
+        address: "Mirpur 10 roundabout, towards Section 2",
+        priority: Priority.HIGH,
+        status: ComplaintStatus.ASSIGNED,
+        citizen: "citizen2@citycare.com",
+        staff: "roads.staff@citycare.com",
+        daysAgo: 1,
     },
     {
         title: "Water pipe is leaking beside the main road",
@@ -251,6 +265,10 @@ const createSample = async (sample: ISampleComplaint, adminId: string) => {
     const isResolved = sample.status === ComplaintStatus.RESOLVED || sample.status === ComplaintStatus.CLOSED;
     const isRejected = sample.status === ComplaintStatus.REJECTED;
     const timing = sample.timing ?? { assignAfterHours: 3, startAfterHours: 8, resolveAfterHours: 30, closeAfterHours: 40 };
+    const location =
+        sample.latitude !== undefined && sample.longitude !== undefined
+            ? { latitude: sample.latitude, longitude: sample.longitude }
+            : pointNear(sample.area, `${sample.title}:${sample.daysAgo}`);
     const assignedAt = staff ? addHours(createdAt, timing.assignAfterHours) : null;
     const resolvedAt = isResolved ? addHours(createdAt, timing.resolveAfterHours) : null;
     const closedAt =
@@ -326,8 +344,9 @@ const createSample = async (sample: ISampleComplaint, adminId: string) => {
             status: sample.status,
             address: sample.address,
             area: sample.area,
-            latitude: sample.latitude ?? null,
-            longitude: sample.longitude ?? null,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            isPublic: category.type === CategoryType.COMPLAINT,
             fee: category.fee,
             paymentStatus: needsPayment ? ComplaintPaymentStatus.UNPAID : ComplaintPaymentStatus.NOT_REQUIRED,
             citizenId: citizen.id,
@@ -401,6 +420,16 @@ const main = async () => {
     await seedUsers();
     await seedComplaints(admin.id);
     await seedHistory(admin.id);
+    await seedCommunity(
+        [...citizens, ...historyCitizens].map((citizen) => citizen.email),
+        [
+            config.admin.email,
+            ...staffMembers.map((staff) => staff.email),
+            ...citizens.map((citizen) => citizen.email),
+            ...historyCitizens.map((citizen) => citizen.email),
+        ],
+        admin.id
+    );
     await invalidateCatalogCache();
 };
 
