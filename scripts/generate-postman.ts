@@ -51,6 +51,7 @@ const TAG_ORDER = [
 const tokenFor: Record<IEndpointDoc["access"], string | null> = {
     Public: null,
     Stripe: null,
+    Scheduler: "cronSecret",
     Citizen: "citizenToken",
     Staff: "staffToken",
     Admin: "adminToken",
@@ -375,6 +376,7 @@ const variables = [
     "sessionId",
     "messageId",
     "notificationId",
+    "cronSecret",
 ];
 
 const collection = {

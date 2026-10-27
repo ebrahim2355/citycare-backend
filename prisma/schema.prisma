@@ -189,6 +189,7 @@ model Complaint {
   submittedAt     DateTime?
   assignedAt      DateTime?
   dueAt           DateTime?
+  escalatedAt     DateTime?
   resolvedAt      DateTime?
   closedAt        DateTime?
   resolutionNote  String?

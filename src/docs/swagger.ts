@@ -1,5 +1,14 @@
 type TMethod = "get" | "post" | "patch" | "delete";
-type TAccess = "Public" | "Any logged in user" | "Citizen" | "Staff" | "Admin" | "Citizen or Admin" | "Staff or Admin" | "Stripe";
+type TAccess =
+    | "Public"
+    | "Any logged in user"
+    | "Citizen"
+    | "Staff"
+    | "Admin"
+    | "Citizen or Admin"
+    | "Staff or Admin"
+    | "Stripe"
+    | "Scheduler";
 
 export interface IEndpointDoc {
     method: TMethod;
@@ -25,6 +34,14 @@ export const endpoints: IEndpointDoc[] = [
         summary: "Check the API, the database and redis",
         access: "Public",
         note: "Answers 503 when the database is not reachable, so it can be used as a readiness probe.",
+    },
+    {
+        method: "get",
+        path: "/jobs/sla-check",
+        tag: "System",
+        summary: "Escalate complaints that missed their deadline",
+        access: "Scheduler",
+        note: "Called once a day by Vercel Cron with Authorization: Bearer CRON_SECRET. Each overdue open complaint is escalated once: its priority goes up one level, the timeline and the audit log get a row, and the admins and the staff member are notified. Read notifications older than 90 days are removed.",
     },
     {
         method: "get",
@@ -230,6 +247,7 @@ export const endpoints: IEndpointDoc[] = [
             "departmentId",
             "area",
             "overdue",
+            "escalated",
             "unassigned",
             "citizenId",
             "assignedStaffId",
@@ -572,6 +590,14 @@ export const endpoints: IEndpointDoc[] = [
         summary: "Get the audit logs",
         access: "Admin",
         query: ["action", "entityType", "entityId", "actorId", "from", "to", ...pagination],
+    },
+    {
+        method: "post",
+        path: "/admin/sla-check",
+        tag: "Admin",
+        summary: "Run the deadline check now",
+        access: "Admin",
+        note: "The same job as the daily scheduler: escalates complaints that missed their deadline and returns how many were escalated.",
     },
     {
         method: "get",

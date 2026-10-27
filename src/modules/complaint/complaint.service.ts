@@ -184,6 +184,10 @@ const buildComplaintFilters = (user: IAuthUser, query: TComplaintQuery): Prisma.
         conditions.push(query.overdue === "true" ? overdueFilter : { NOT: overdueFilter });
     }
 
+    if (query.escalated) {
+        where.escalatedAt = query.escalated === "true" ? { not: null } : null;
+    }
+
     if (query.searchTerm) {
         conditions.push({
             OR: [

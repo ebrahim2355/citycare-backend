@@ -9,6 +9,7 @@ import { CategoryRoutes } from "../modules/category/category.routes";
 import { ComplaintRoutes } from "../modules/complaint/complaint.routes";
 import { ContactRoutes } from "../modules/contact/contact.routes";
 import { DepartmentRoutes } from "../modules/department/department.routes";
+import { JobsRoutes } from "../modules/jobs/jobs.routes";
 import { NotificationRoutes } from "../modules/notification/notification.routes";
 import { PaymentRoutes } from "../modules/payment/payment.routes";
 import { StatsRoutes } from "../modules/stats/stats.routes";
@@ -68,6 +69,7 @@ const moduleRoutes = [
     { path: "/stats", route: StatsRoutes },
     { path: "/contact", route: ContactRoutes },
     { path: "/notifications", route: NotificationRoutes },
+    { path: "/jobs", route: JobsRoutes },
     { path: "/admin", route: AdminRoutes },
     { path: "/docs", route: DocsRoutes },
 ];

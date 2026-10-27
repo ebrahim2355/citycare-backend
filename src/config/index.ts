@@ -42,6 +42,7 @@ const envSchema = z.object({
     CLIENT_URL: z.url().optional(),
     CORS_ORIGINS: z.string().default(""),
     INTERNAL_API_KEY: z.string().default(""),
+    CRON_SECRET: z.string().default(""),
     RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().positive().default(15),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
@@ -118,6 +119,7 @@ const config = {
     corsOrigins,
     clientOrigins: [...new Set([...(clientUrl ? [clientUrl] : []), ...corsOrigins])],
     internalApiKey: env.INTERNAL_API_KEY,
+    cronSecret: env.CRON_SECRET,
     rateLimit: {
         windowMinutes: env.RATE_LIMIT_WINDOW_MINUTES,
         max: env.RATE_LIMIT_MAX,

@@ -81,6 +81,7 @@ const complaintQuerySchema = z.object({
             assignedStaffId: uuidSchema("assignedStaffId").optional(),
             unassigned: booleanText("unassigned").optional(),
             overdue: booleanText("overdue").optional(),
+            escalated: booleanText("escalated").optional(),
             area: z.string().trim().max(80, "area is too long").optional(),
             searchTerm: z.string().trim().max(100, "searchTerm is too long").optional(),
             from: z.coerce.date("from must be a valid date").optional(),

@@ -195,7 +195,7 @@ const getTrend = () => {
 };
 
 const getAdminStats = () => {
-    return remember("stats:admin:v2", ADMIN_STATS_SECONDS, async () => {
+    return remember("stats:admin:v3", ADMIN_STATS_SECONDS, async () => {
         const now = new Date();
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const active: Prisma.ComplaintWhereInput = { deletedAt: null };
@@ -207,6 +207,7 @@ const getAdminStats = () => {
             openByPriority,
             unassigned,
             overdue,
+            escalated,
             createdLast7Days,
             payments,
             feedback,
@@ -220,6 +221,7 @@ const getAdminStats = () => {
             countByPriority({ ...active, status: { in: OPEN_STATUSES } }),
             prisma.complaint.count({ where: { ...active, status: ComplaintStatus.SUBMITTED, assignedStaffId: null } }),
             prisma.complaint.count({ where: { ...active, status: { in: OPEN_STATUSES }, dueAt: { lt: now } } }),
+            prisma.complaint.count({ where: { ...active, status: { in: OPEN_STATUSES }, escalatedAt: { not: null } } }),
             prisma.complaint.count({ where: { ...active, createdAt: { gte: weekAgo } } }),
             prisma.payment.groupBy({ by: ["status"], _count: { _all: true }, _sum: { amount: true } }),
             prisma.feedback.aggregate({ _count: { _all: true }, _avg: { rating: true } }),
@@ -246,6 +248,7 @@ const getAdminStats = () => {
                 open: sumStatuses(byStatus, OPEN_STATUSES),
                 unassigned,
                 overdue,
+                escalated,
                 createdLast7Days,
             },
             payments: {

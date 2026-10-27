@@ -2215,6 +2215,11 @@
                   "disabled": true
                 },
                 {
+                  "key": "escalated",
+                  "value": "",
+                  "disabled": true
+                },
+                {
                   "key": "unassigned",
                   "value": "",
                   "disabled": true
@@ -4041,6 +4046,35 @@
           "response": []
         },
         {
+          "name": "Run the deadline check now",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/sla-check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sla-check"
+              ]
+            },
+            "description": "Access: Admin. The same job as the daily scheduler: escalates complaints that missed their deadline and returns how many were escalated.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get the contact messages",
           "request": {
             "method": "GET",
@@ -4218,6 +4252,35 @@
           "response": []
         },
         {
+          "name": "Escalate complaints that missed their deadline",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/sla-check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "sla-check"
+              ]
+            },
+            "description": "Access: Scheduler. Called once a day by Vercel Cron with Authorization: Bearer CRON_SECRET. Each overdue open complaint is escalated once: its priority goes up one level, the timeline and the audit log get a row, and the admins and the staff member are notified. Read notifications older than 90 days are removed.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cronSecret}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Check that the API process is running",
           "request": {
             "method": "GET",
@@ -4321,6 +4384,10 @@
     },
     {
       "key": "notificationId",
+      "value": ""
+    },
+    {
+      "key": "cronSecret",
       "value": ""
     }
   ]

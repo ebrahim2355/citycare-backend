@@ -274,6 +274,7 @@ const reopenComplaint = async (user: IAuthUser, id: string, payload: TReopenComp
                 resolvedAt: null,
                 resolutionNote: null,
                 dueAt: addHours(now, details.category.slaHours),
+                escalatedAt: null,
                 reopenCount: { increment: 1 },
                 ...(staffIsAvailable ? {} : { assignedStaffId: null, assignedAt: null }),
             },

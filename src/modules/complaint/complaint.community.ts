@@ -160,6 +160,7 @@ const getMapComplaints = async (user: IAuthUser, query: TMapQuery) => {
             latitude: true,
             longitude: true,
             dueAt: true,
+            escalatedAt: true,
             createdAt: true,
             category: { select: { id: true, name: true } },
             department: { select: { id: true, name: true } },
