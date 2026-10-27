@@ -7,6 +7,8 @@ const HOUR = 60 * 60 * 1000;
 
 const label = (complaint: { trackingCode: string; title: string }) => `${complaint.trackingCode} · ${complaint.title}`;
 
+const notAfterNow = (time: number) => new Date(Math.min(time, Date.now()));
+
 const backfillLocations = async (citizenEmails: string[]) => {
     const owned = { citizen: { email: { in: citizenEmails } } };
     const missing = await prisma.complaint.findMany({ where: { ...owned, latitude: null }, select: { id: true, area: true, title: true } });
@@ -64,7 +66,7 @@ const seedConversation = async (adminId: string) => {
         return 0;
     }
 
-    const at = (hours: number) => new Date(leak.createdAt.getTime() + hours * HOUR);
+    const at = (hours: number) => notAfterNow(leak.createdAt.getTime() + hours * HOUR);
     const messages = [
         { authorId: leak.citizenId, body: "The water is now running onto the footpath too. People are walking around it.", hours: 9 },
         {
@@ -172,7 +174,7 @@ const seedNotifications = async (demoEmails: string[]) => {
                 type: NotificationType.COMPLAINT_STATUS_CHANGED,
                 title: "Work has started",
                 body: `${label(complaint)} is being worked on now.`,
-                createdAt: new Date((complaint.assignedAt ?? complaint.createdAt).getTime() + 2 * HOUR),
+                createdAt: notAfterNow((complaint.assignedAt ?? complaint.createdAt).getTime() + 2 * HOUR),
             });
         }
 
@@ -197,7 +199,7 @@ const seedNotifications = async (demoEmails: string[]) => {
                         ? "A neighbour supports your report"
                         : `${complaint._count.supports} people support your report`,
                 body: `${label(complaint)} is getting attention from people nearby.`,
-                createdAt: new Date(complaint.createdAt.getTime() + 6 * HOUR),
+                createdAt: notAfterNow(complaint.createdAt.getTime() + 6 * HOUR),
             });
         }
 
