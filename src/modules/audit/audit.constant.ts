@@ -31,6 +31,7 @@ export const AuditAction = {
     PAYMENT_REFUNDED: "PAYMENT_REFUNDED",
     MESSAGE_REPLIED: "MESSAGE_REPLIED",
     MESSAGE_STATUS_CHANGED: "MESSAGE_STATUS_CHANGED",
+    DATA_EXPORTED: "DATA_EXPORTED",
 } as const;
 
 export type TAuditAction = (typeof AuditAction)[keyof typeof AuditAction];

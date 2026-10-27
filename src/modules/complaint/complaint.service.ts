@@ -418,6 +418,7 @@ const deleteComplaint = async (user: IAuthUser, id: string, context: IRequestCon
 
 export const ComplaintService = {
     ensureCanView,
+    buildComplaintFilters,
     createComplaint,
     getComplaints,
     getComplaintById,
