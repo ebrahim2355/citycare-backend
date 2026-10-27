@@ -2296,7 +2296,7 @@
                 "{{trackingCode}}"
               ]
             },
-            "description": "Access: Public. Shows the status and the timeline. No personal data. A report its citizen made public also shows its id, a rounded location and the number of supporters.",
+            "description": "Access: Public. Shows the status and the timeline. No personal data. A report its citizen made public also shows its id, a rounded location and the number of supporters. With an access token the answer also says if the report is yours (isMine) and if you support it (supportedByMe).",
             "auth": {
               "type": "noauth"
             }
@@ -2981,7 +2981,7 @@
                 }
               ]
             },
-            "description": "Access: Public. Open or recently resolved complaints that their citizen made public and that have a location. No personal data, coordinates rounded to about 10 meters. Cached for one minute.",
+            "description": "Access: Public. Open or recently resolved complaints that their citizen made public and that have a location. No personal data, coordinates rounded to about 10 meters. Cached for one minute and cleared when a report changes. With an access token each report also says if it is yours (isMine) and if you support it (supportedByMe).",
             "auth": {
               "type": "noauth"
             }

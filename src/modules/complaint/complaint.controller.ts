@@ -1,6 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { currentUser } from "../../middlewares/auth";
-import { setCacheHeader } from "../../utils/cache";
+import { invalidatePublicReports, setCacheHeader } from "../../utils/cache";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
 import sendResponse from "../../utils/sendResponse";
@@ -22,6 +22,7 @@ const refundMessages: Record<TRefundResult, string> = {
 const createComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintService.createComplaint(currentUser(req), req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
     await NotificationService.complaintCreated(result);
 
     sendResponse(res, {
@@ -56,7 +57,7 @@ const getComplaintById = catchAsync(async (req, res) => {
 });
 
 const trackComplaint = catchAsync(async (req, res) => {
-    const result = await ComplaintService.trackComplaint(req.params.trackingCode as string);
+    const result = await ComplaintService.trackComplaint(req.params.trackingCode as string, req.user);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -68,6 +69,8 @@ const trackComplaint = catchAsync(async (req, res) => {
 const updateComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintService.updateComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: "Complaint updated successfully",
@@ -78,6 +81,8 @@ const updateComplaint = catchAsync(async (req, res) => {
 const deleteComplaint = catchAsync(async (req, res) => {
     await ComplaintService.deleteComplaint(currentUser(req), req.params.id as string, getRequestContext(req));
 
+    await invalidatePublicReports();
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: "Complaint removed successfully",
@@ -87,6 +92,7 @@ const deleteComplaint = catchAsync(async (req, res) => {
 const assignComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintAssignment.assignComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
     await NotificationService.complaintAssigned(result);
 
     sendResponse(res, {
@@ -99,6 +105,7 @@ const assignComplaint = catchAsync(async (req, res) => {
 const changeStatus = catchAsync(async (req, res) => {
     const result = await ComplaintWorkflow.changeStatus(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
     await NotificationService.complaintStatusChanged(result.complaint);
 
     sendResponse(res, {
@@ -111,6 +118,8 @@ const changeStatus = catchAsync(async (req, res) => {
 const cancelComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintWorkflow.cancelComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: `Complaint cancelled successfully.${refundMessages[result.refund]}`,
@@ -120,6 +129,8 @@ const cancelComplaint = catchAsync(async (req, res) => {
 
 const reopenComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintWorkflow.reopenComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
+
+    await invalidatePublicReports();
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -131,6 +142,8 @@ const reopenComplaint = catchAsync(async (req, res) => {
 const transferComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintWorkflow.transferComplaint(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: `Complaint transferred to ${result.department.name}`,
@@ -141,6 +154,8 @@ const transferComplaint = catchAsync(async (req, res) => {
 const submitFeedback = catchAsync(async (req, res) => {
     const result = await ComplaintWorkflow.submitFeedback(currentUser(req), req.params.id as string, req.body, getRequestContext(req));
 
+    await invalidatePublicReports();
+
     sendResponse(res, {
         statusCode: StatusCodes.CREATED,
         message: "Thank you for your feedback",
@@ -148,8 +163,8 @@ const submitFeedback = catchAsync(async (req, res) => {
     });
 });
 
-const getPublicReports = catchAsync(async (_req, res) => {
-    const result = await ComplaintCommunity.getPublicReports(res.locals.query);
+const getPublicReports = catchAsync(async (req, res) => {
+    const result = await ComplaintCommunity.getPublicReports(res.locals.query, req.user);
 
     setCacheHeader(res, result.cached);
     sendResponse(res, {
@@ -182,6 +197,8 @@ const getMapComplaints = catchAsync(async (req, res) => {
 const supportComplaint = catchAsync(async (req, res) => {
     const result = await ComplaintCommunity.supportComplaint(currentUser(req), req.params.id as string);
 
+    await invalidatePublicReports();
+
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: "Thanks for your support",
@@ -191,6 +208,8 @@ const supportComplaint = catchAsync(async (req, res) => {
 
 const withdrawSupport = catchAsync(async (req, res) => {
     const result = await ComplaintCommunity.withdrawSupport(currentUser(req), req.params.id as string);
+
+    await invalidatePublicReports();
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,

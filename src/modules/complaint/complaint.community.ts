@@ -1,9 +1,9 @@
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import { CategoryType, ComplaintStatus, NotificationType, type Prisma, Role } from "../../generated/prisma/client";
+import { CategoryType, ComplaintStatus, NotificationType, Prisma, Role } from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import type { IAuthUser } from "../../middlewares/auth";
-import { remember } from "../../utils/cache";
+import { cacheKeys, remember } from "../../utils/cache";
 import { boundingBox, distanceMeters, roundCoordinate } from "../../utils/geo";
 import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { OPEN_STATUSES } from "./complaint.constant";
@@ -13,6 +13,7 @@ import type { TMapQuery, TNearbyQuery, TPublicReportsQuery } from "./complaint.v
 const PUBLIC_CACHE_SECONDS = 60;
 const RESOLVED_DAYS = 90;
 const NEARBY_LIMIT = 5;
+const NEARBY_CANDIDATES = 50;
 const SUPPORT_MILESTONES = [1, 5, 10, 25, 50, 100];
 
 const FINISHED_STATUSES: ComplaintStatus[] = [ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED];
@@ -69,10 +70,24 @@ const statusFilter = (status: TPublicReportsQuery["status"]): Prisma.ComplaintWh
     return { status: { in: OPEN_STATUSES } };
 };
 
-const getPublicReports = async (query: TPublicReportsQuery) => {
-    const key = `public-reports:${JSON.stringify([query.status ?? "OPEN", query.categoryId, query.departmentId, query.minLat, query.maxLat, query.minLng, query.maxLng, query.limit])}`;
+const markForViewer = async <T extends { id: string }>(reports: T[], viewer?: IAuthUser) => {
+    const ids = reports.map((report) => report.id);
+    const [supported, mine] = viewer
+        ? await Promise.all([
+              prisma.complaintSupport.findMany({ where: { userId: viewer.id, complaintId: { in: ids } }, select: { complaintId: true } }),
+              prisma.complaint.findMany({ where: { id: { in: ids }, citizenId: viewer.id }, select: { id: true } }),
+          ])
+        : [[], []];
+    const supportedIds = new Set(supported.map((row) => row.complaintId));
+    const mineIds = new Set(mine.map((row) => row.id));
 
-    return remember(key, PUBLIC_CACHE_SECONDS, async () => {
+    return reports.map((report) => ({ ...report, isMine: mineIds.has(report.id), supportedByMe: supportedIds.has(report.id) }));
+};
+
+const getPublicReports = async (query: TPublicReportsQuery, viewer?: IAuthUser) => {
+    const key = `${cacheKeys.publicReportsPrefix}${JSON.stringify([query.status ?? "OPEN", query.categoryId, query.departmentId, query.minLat, query.maxLat, query.minLng, query.maxLng, query.limit])}`;
+
+    const result = await remember(key, PUBLIC_CACHE_SECONDS, async () => {
         const where: Prisma.ComplaintWhereInput = {
             ...publicWhere(),
             AND: [
@@ -99,23 +114,35 @@ const getPublicReports = async (query: TPublicReportsQuery) => {
 
         return reports.map(toPublicReport);
     });
+
+    return { data: await markForViewer(result.data, viewer), cached: result.cached };
+};
+
+const nearestPublicIds = (center: { latitude: number; longitude: number }, radius: number, categoryId?: string) => {
+    const box = boundingBox(center, radius);
+
+    return prisma.$queryRaw<{ id: string }[]>`
+        SELECT "id"
+        FROM "complaints"
+        WHERE "deletedAt" IS NULL
+            AND "isPublic" = true
+            AND "type"::text = ${CategoryType.COMPLAINT}
+            AND "status"::text IN (${Prisma.join(OPEN_STATUSES)})
+            AND "latitude" BETWEEN ${box.minLat} AND ${box.maxLat}
+            AND "longitude" BETWEEN ${box.minLng} AND ${box.maxLng}
+            ${categoryId ? Prisma.sql`AND "categoryId" = ${categoryId}` : Prisma.empty}
+        ORDER BY power("latitude" - ${center.latitude}, 2) + power(("longitude" - ${center.longitude}) * cos(radians(${center.latitude})), 2), "id"
+        LIMIT ${NEARBY_CANDIDATES}
+    `;
 };
 
 const getNearbyReports = async (user: IAuthUser, query: TNearbyQuery) => {
     const center = { latitude: query.latitude, longitude: query.longitude };
     const radius = query.radius ?? 300;
-    const box = boundingBox(center, radius);
-
+    const ids = (await nearestPublicIds(center, radius, query.categoryId)).map((row) => row.id);
     const candidates = await prisma.complaint.findMany({
-        where: {
-            ...publicWhere(),
-            status: { in: OPEN_STATUSES },
-            latitude: { gte: box.minLat, lte: box.maxLat },
-            longitude: { gte: box.minLng, lte: box.maxLng },
-            ...(query.categoryId ? { categoryId: query.categoryId } : {}),
-        },
+        where: { id: { in: ids } },
         select: { ...publicSelect, citizenId: true, supports: { where: { userId: user.id }, select: { userId: true } } },
-        take: 100,
     });
 
     return candidates

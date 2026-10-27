@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Role } from "../../src/generated/prisma/client";
 import getRedis from "../../src/lib/redis";
 import { resetDatabase } from "../helpers/db";
-import { createDepartment, createUser, type ITestUser } from "../helpers/factories";
+import { createCategory, createDepartment, createUser, type ITestUser, submitComplaint } from "../helpers/factories";
 import { http } from "../helpers/http";
 
 interface IDepartment {
@@ -143,5 +143,58 @@ describe("category cache", () => {
 
         expect(res.status).toBe(200);
         expect(res.body.data).toHaveLength(0);
+    });
+});
+
+describe("public report cache", () => {
+    let owner: ITestUser;
+    let neighbour: ITestUser;
+    let report: { id: string };
+
+    const publicFeed = async () => {
+        const res = await http().get("/complaints/public");
+
+        expect(res.status).toBe(200);
+
+        return { cache: res.headers["x-cache"], reports: res.body.data as { id: string; supportCount: number }[] };
+    };
+
+    beforeAll(async () => {
+        const footpath = await createCategory(roads.id, { name: "Broken footpath" });
+
+        owner = await createUser({ name: "Report Owner" });
+        neighbour = await createUser({ name: "Next Door" });
+        report = await submitComplaint(owner, footpath.id, { latitude: 23.7461, longitude: 90.3742, isPublic: true });
+    });
+
+    it("serves the map feed from redis while nothing changes", async () => {
+        const first = await publicFeed();
+
+        expect(first.cache).toBe("MISS");
+        expect(first.reports.map((item) => item.id)).toEqual([report.id]);
+        expect((await publicFeed()).cache).toBe("HIT");
+    });
+
+    it("shows a new support at once", async () => {
+        expect((await http(neighbour.token).post(`/complaints/${report.id}/support`)).status).toBe(200);
+
+        const feed = await publicFeed();
+
+        expect(feed.cache).toBe("MISS");
+        expect(feed.reports[0]?.supportCount).toBe(1);
+    });
+
+    it("drops a report as soon as its owner makes it private", async () => {
+        expect((await publicFeed()).cache).toBe("HIT");
+        expect((await http(owner.token).patch(`/complaints/${report.id}`, { isPublic: false })).status).toBe(200);
+        expect((await publicFeed()).reports).toEqual([]);
+    });
+
+    it("drops a report at once when an admin removes it", async () => {
+        expect((await http(owner.token).patch(`/complaints/${report.id}`, { isPublic: true })).status).toBe(200);
+        expect((await publicFeed()).reports).toHaveLength(1);
+        expect((await publicFeed()).cache).toBe("HIT");
+        expect((await http(admin.token).delete(`/complaints/${report.id}`)).status).toBe(200);
+        expect((await publicFeed()).reports).toEqual([]);
     });
 });

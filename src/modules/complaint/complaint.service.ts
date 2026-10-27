@@ -245,11 +245,12 @@ const getComplaintById = async (user: IAuthUser, id: string) => {
     return withOverdue(complaint);
 };
 
-const trackComplaint = async (trackingCode: string) => {
+const trackComplaint = async (trackingCode: string, viewer?: IAuthUser) => {
     const complaint = await prisma.complaint.findFirst({
         where: { trackingCode: trackingCode.toUpperCase(), deletedAt: null },
         select: {
             id: true,
+            citizenId: true,
             trackingCode: true,
             title: true,
             type: true,
@@ -278,13 +279,23 @@ const trackComplaint = async (trackingCode: string) => {
         throw new AppError(StatusCodes.NOT_FOUND, "Complaint not found", "No complaint found with this tracking code");
     }
 
+    const { citizenId, ...tracked } = complaint;
     const visible = complaint.isPublic && complaint.latitude !== null && complaint.longitude !== null;
+    const support =
+        viewer && complaint.isPublic
+            ? await prisma.complaintSupport.findUnique({
+                  where: { complaintId_userId: { complaintId: complaint.id, userId: viewer.id } },
+                  select: { userId: true },
+              })
+            : null;
 
     return withOverdue({
-        ...complaint,
+        ...tracked,
         id: complaint.isPublic ? complaint.id : null,
         latitude: visible && complaint.latitude !== null ? roundCoordinate(complaint.latitude) : null,
         longitude: visible && complaint.longitude !== null ? roundCoordinate(complaint.longitude) : null,
+        isMine: viewer?.id === citizenId,
+        supportedByMe: Boolean(support),
     });
 };
 

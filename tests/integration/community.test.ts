@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { CategoryType } from "../../src/generated/prisma/client";
 import { deleteCacheByPrefix } from "../../src/utils/cache";
 import { prisma, resetDatabase } from "../helpers/db";
 import { assignTo, createCity, moveStatus, resolveComplaint, submitComplaint } from "../helpers/factories";
@@ -179,6 +180,45 @@ describe("nearby reports for the wizard", () => {
         expect(light.body.data.map((report: IReport) => report.id)).toEqual([darkLight.id]);
         expect(close.body.data.map((report: IReport) => report.id)).toEqual([schoolHole.id]);
     });
+
+    it("finds the closest report even where the area around it is crowded", async () => {
+        const gulshan = { latitude: 23.7925, longitude: 90.4078 };
+        const row = (id: string, number: number, latitude: number, longitude: number) => ({
+            id,
+            trackingCode: `CC-CROWD-${String(number).padStart(4, "0")}`,
+            title: "Report at the edge of the search area",
+            description: "One of many reports a little too far from the spot.",
+            type: CategoryType.COMPLAINT,
+            address: "Gulshan Avenue",
+            area: "Gulshan",
+            latitude,
+            longitude,
+            isPublic: true,
+            citizenId: city.citizen2.id,
+            categoryId: city.pothole.id,
+            departmentId: city.roads.id,
+        });
+        const corners = Array.from({ length: 120 }, (_, index) =>
+            row(
+                `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+                index,
+                gulshan.latitude + (index % 2 ? 0.0026 : -0.0026),
+                gulshan.longitude + (index % 4 < 2 ? 0.0028 : -0.0028)
+            )
+        );
+        const closest = row("ffffffff-ffff-4fff-bfff-ffffffffffff", 9999, gulshan.latitude, gulshan.longitude);
+
+        await prisma.complaint.createMany({ data: [...corners, closest] });
+
+        try {
+            const res = await http(city.citizen.token).get(`/complaints/nearby?latitude=${gulshan.latitude}&longitude=${gulshan.longitude}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.map((report: IReport) => report.id)).toEqual([closest.id]);
+        } finally {
+            await prisma.complaint.deleteMany({ where: { id: { in: [...corners, closest].map((item) => item.id) } } });
+        }
+    });
 });
 
 describe("supporting a report", () => {
@@ -217,6 +257,26 @@ describe("supporting a report", () => {
         expect(nearby.body.data[0]).toMatchObject({ id: schoolHole.id, supportCount: 1, supportedByMe: true });
         expect(map.body.data.find((report: IReport) => report.id === schoolHole.id).supportCount).toBe(1);
         expect(list.body.data[0]).toMatchObject({ id: schoolHole.id, supportCount: 1, isPublic: true });
+    });
+
+    it("tells a signed in viewer which reports they support or own, on the map and the tracking page", async () => {
+        const school = (reports: IReport[]) => reports.find((report) => report.id === schoolHole.id);
+        const anonymous = await freshPublic();
+        const neighbour = await http(city.citizen2.token).get("/complaints/public");
+        const owner = await http(city.citizen.token).get("/complaints/public");
+
+        expect(school(anonymous.body.data)).toMatchObject({ isMine: false, supportedByMe: false });
+        expect(neighbour.headers["x-cache"]).toBe("HIT");
+        expect(school(neighbour.body.data)).toMatchObject({ isMine: false, supportedByMe: true });
+        expect(school(owner.body.data)).toMatchObject({ isMine: true, supportedByMe: false });
+
+        const track = (token?: string) => http(token).get(`/complaints/track/${schoolHole.trackingCode}`);
+        const mine = (await track(city.citizen.token)).body.data;
+
+        expect((await track()).body.data).toMatchObject({ supportCount: 1, isMine: false, supportedByMe: false });
+        expect((await track(city.citizen2.token)).body.data).toMatchObject({ isMine: false, supportedByMe: true });
+        expect(mine).toMatchObject({ isMine: true, supportedByMe: false });
+        expect(mine).not.toHaveProperty("citizenId");
     });
 });
 

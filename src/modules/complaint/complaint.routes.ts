@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { Role } from "../../generated/prisma/client";
-import auth from "../../middlewares/auth";
+import auth, { optionalAuth } from "../../middlewares/auth";
 import { uploadImages } from "../../middlewares/upload";
 import validateRequest from "../../middlewares/validateRequest";
 import { idParamSchema } from "../../validations/common.validation";
@@ -11,8 +11,13 @@ const router = Router();
 
 router.post("/", auth(Role.CITIZEN), validateRequest(ComplaintValidation.createComplaintSchema), ComplaintController.createComplaint);
 router.get("/", auth(), validateRequest(ComplaintValidation.complaintQuerySchema), ComplaintController.getComplaints);
-router.get("/track/:trackingCode", validateRequest(ComplaintValidation.trackingCodeSchema), ComplaintController.trackComplaint);
-router.get("/public", validateRequest(ComplaintValidation.publicReportsQuerySchema), ComplaintController.getPublicReports);
+router.get(
+    "/track/:trackingCode",
+    optionalAuth,
+    validateRequest(ComplaintValidation.trackingCodeSchema),
+    ComplaintController.trackComplaint
+);
+router.get("/public", optionalAuth, validateRequest(ComplaintValidation.publicReportsQuerySchema), ComplaintController.getPublicReports);
 router.get("/nearby", auth(), validateRequest(ComplaintValidation.nearbyQuerySchema), ComplaintController.getNearbyReports);
 router.get("/map", auth(), validateRequest(ComplaintValidation.mapQuerySchema), ComplaintController.getMapComplaints);
 router.get("/:id", auth(), validateRequest(idParamSchema), ComplaintController.getComplaintById);

@@ -263,7 +263,7 @@ export const endpoints: IEndpointDoc[] = [
         tag: "Complaints",
         summary: "Track a complaint with its tracking code",
         access: "Public",
-        note: "Shows the status and the timeline. No personal data. A report its citizen made public also shows its id, a rounded location and the number of supporters.",
+        note: "Shows the status and the timeline. No personal data. A report its citizen made public also shows its id, a rounded location and the number of supporters. With an access token the answer also says if the report is yours (isMine) and if you support it (supportedByMe).",
     },
     {
         method: "get",
@@ -441,7 +441,7 @@ export const endpoints: IEndpointDoc[] = [
         tag: "Community",
         summary: "List public reports for the city map",
         access: "Public",
-        note: "Open or recently resolved complaints that their citizen made public and that have a location. No personal data, coordinates rounded to about 10 meters. Cached for one minute.",
+        note: "Open or recently resolved complaints that their citizen made public and that have a location. No personal data, coordinates rounded to about 10 meters. Cached for one minute and cleared when a report changes. With an access token each report also says if it is yours (isMine) and if you support it (supportedByMe).",
         query: ["status", "categoryId", "departmentId", "minLat", "maxLat", "minLng", "maxLng", "limit"],
     },
     {

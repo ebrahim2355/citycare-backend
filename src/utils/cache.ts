@@ -9,6 +9,7 @@ export const cacheKeys = {
     departments: "departments:list",
     categoriesPrefix: "categories:",
     categories: (type = "all", departmentId = "all") => `categories:${type}:${departmentId}`,
+    publicReportsPrefix: "public-reports:",
 };
 
 export const getCache = async <T>(key: string): Promise<T | null> => {
@@ -96,6 +97,8 @@ export const remember = async <T>(key: string, ttlSeconds: number, loader: () =>
 export const setCacheHeader = (res: Response, cached: boolean) => {
     res.setHeader("X-Cache", cached ? "HIT" : "MISS");
 };
+
+export const invalidatePublicReports = () => deleteCacheByPrefix(cacheKeys.publicReportsPrefix);
 
 export const invalidateCatalogCache = async () => {
     await Promise.all([deleteCache(cacheKeys.departments), deleteCacheByPrefix(cacheKeys.categoriesPrefix)]);
