@@ -47,7 +47,7 @@ Stripe is in test mode. Pay with the card `4242 4242 4242 4242`, any future date
 - **Maps and community.** Complaints can carry a location. Public reports feed a city map, the wizard finds the same problem nearby with a distance query, and citizens can support each other's reports.
 - **Deadlines that escalate.** A daily scheduled job flags every open complaint that missed its deadline, raises its priority and tells the admins and the assigned staff member.
 - **Built to be operated.** Structured JSON logs with a request id on every line, liveness and readiness checks, a Redis cache with exact invalidation, Redis rate limits that survive a Redis outage, and streamed CSV exports.
-- **464 automated tests** (unit and integration against real PostgreSQL and Redis) run in GitHub Actions together with a check that the migrations match the schema.
+- **466 automated tests** (unit and integration against real PostgreSQL and Redis) run in GitHub Actions together with a check that the migrations match the schema.
 - **Runs anywhere.** One `docker compose up` starts the API, PostgreSQL, Redis and a mail catcher. Production runs on Vercel with a cron job.
 
 ## The Problem
@@ -581,7 +581,7 @@ The public map feed and the tracking endpoint also accept an access token. With 
 | Unit | 9 | Validation schemas, tokens, CSV writing, distances, client IP, upload checks, the error handler and helpers |
 | Integration | 23 | The real Express app against PostgreSQL and Redis: auth and Google login, the full workflow, assignment races, payments with the Stripe webhook, refunds, photos, messages, community, notifications, the deadline job, exports, caching, rate limits, emails and the API docs |
 
-464 tests in total. Stripe, Cloudinary, Google and email are replaced by fakes, so the tests never call a real service and never need real keys.
+466 tests in total. Stripe, Cloudinary, Google and email are replaced by fakes, so the tests never call a real service and never need real keys.
 
 ```bash
 bun run test                  # every test
