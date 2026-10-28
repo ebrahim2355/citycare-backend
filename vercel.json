@@ -16,6 +16,10 @@
         {
             "path": "/api/v1/jobs/sla-check",
             "schedule": "0 2 * * *"
+        },
+        {
+            "path": "/api/v1/jobs/payment-check",
+            "schedule": "30 2 * * *"
         }
     ]
 }
