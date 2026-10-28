@@ -25,13 +25,14 @@ const createStore = (name: string) => {
     return new RedisStore({
         prefix: `citycare:ratelimit:${name}:`,
         sendCommand: async (command: string, ...args: string[]) => {
-            const ready = await getReadyRedis();
+            const isScriptLoad = command.toUpperCase() === "SCRIPT" && args[0]?.toUpperCase() === "LOAD";
+            const ready = isScriptLoad && redis.status !== "ready" ? null : await getReadyRedis();
 
             if (ready) {
                 return ready.call(command, ...args) as Promise<RedisReply>;
             }
 
-            if (command.toUpperCase() === "SCRIPT" && args[0]?.toUpperCase() === "LOAD") {
+            if (isScriptLoad) {
                 return createHash("sha1")
                     .update(args[1] ?? "")
                     .digest("hex");

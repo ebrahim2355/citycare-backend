@@ -210,6 +210,32 @@ describe("when redis comes back after a cold start without it", () => {
     });
 });
 
+describe("when the connection to redis drops", () => {
+    let dropped: TLoadedApp;
+
+    beforeAll(async () => {
+        dropped = await loadApp({});
+    });
+
+    it("opens no connection until a request needs redis", () => {
+        expect(dropped.redis?.status).toBe("wait");
+    });
+
+    it("reconnects inside the next request instead of skipping redis", async () => {
+        expect((await request(dropped.app).get("/api/v1/health")).body.data.redis).toBe("up");
+
+        const admin = new Redis(process.env.REDIS_URL || "redis://127.0.0.1:6379");
+
+        await admin.call("CLIENT", "KILL", "ID", String(await dropped.redis?.call("CLIENT", "ID")));
+        admin.disconnect();
+        await vi.waitFor(() => expect(dropped.redis?.status).not.toBe("ready"));
+
+        const health = await request(dropped.app).get("/api/v1/health");
+
+        expect(health.body.data).toMatchObject({ database: "up", redis: "up" });
+    });
+});
+
 describe("without redis", () => {
     let memory: TLoadedApp;
 
