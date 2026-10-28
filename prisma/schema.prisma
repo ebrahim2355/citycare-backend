@@ -259,6 +259,13 @@ model Feedback {
 
 enum PaymentProvider {
   STRIPE
+  SSLCOMMERZ
+}
+
+enum PaymentMethod {
+  CARD
+  BKASH
+  NAGAD
 }
 
 enum PaymentStatus {
@@ -270,20 +277,25 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id              String          @id @default(uuid())
-  complaintId     String
-  citizenId       String
-  amount          Decimal         @db.Decimal(10, 2)
-  currency        String          @default("usd")
-  provider        PaymentProvider @default(STRIPE)
-  status          PaymentStatus   @default(PENDING)
-  transactionId   String          @unique
-  paymentIntentId String?
-  refundId        String?
-  paidAt          DateTime?
-  refundedAt      DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                String          @id @default(uuid())
+  complaintId       String
+  citizenId         String
+  amount            Decimal         @db.Decimal(10, 2)
+  currency          String          @default("usd")
+  provider          PaymentProvider @default(STRIPE)
+  method            PaymentMethod   @default(CARD)
+  status            PaymentStatus   @default(PENDING)
+  transactionId     String          @unique
+  paymentIntentId   String?
+  validationId      String?
+  bankTransactionId String?
+  chargedAmount     Decimal?        @db.Decimal(12, 2)
+  chargedCurrency   String?
+  refundId          String?
+  paidAt            DateTime?
+  refundedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Restrict)
   citizen   User      @relation(fields: [citizenId], references: [id], onDelete: Restrict)
@@ -291,6 +303,7 @@ model Payment {
   @@index([complaintId, status])
   @@index([citizenId, status])
   @@index([paymentIntentId])
+  @@index([provider, status, createdAt])
   @@index([createdAt])
   @@map("payments")
 }
