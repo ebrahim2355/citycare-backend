@@ -117,7 +117,7 @@ export const EmailTemplates = {
         ),
     }),
 
-    complaintRejected: (name: string, complaint: IComplaintInfo, reason: string | null, refunded: boolean) => ({
+    complaintRejected: (name: string, complaint: IComplaintInfo, reason: string | null, refundedTo: string | null) => ({
         subject: `Your complaint was rejected (${complaint.trackingCode})`,
         html: layout(
             "Your complaint was rejected",
@@ -125,7 +125,7 @@ export const EmailTemplates = {
                 `Hello ${escapeHtml(name)},`,
                 `"${escapeHtml(complaint.title)}" was rejected by the city admin.`,
                 ...(reason ? [`Reason: ${escapeHtml(reason)}`] : []),
-                ...(refunded ? ["The service fee you paid was refunded to your card."] : []),
+                ...(refundedTo ? [`The service fee you paid was refunded to ${escapeHtml(refundedTo)}.`] : []),
             ],
             { label: "Tracking code", value: complaint.trackingCode }
         ),

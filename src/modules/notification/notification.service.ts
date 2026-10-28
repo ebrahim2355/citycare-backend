@@ -19,9 +19,25 @@ interface IComplaintForEmail {
     rejectionReason: string | null;
     citizen: IPerson;
     assignedStaff: IPerson | null;
+    payments?: { method: string; status: string }[];
 }
 
+const REFUND_TARGETS: Record<string, string> = {
+    BKASH: "your bKash account",
+    NAGAD: "your Nagad account",
+};
+
 const formatMoney = (amount: unknown) => `${config.stripe.currency.toUpperCase()} ${Number(amount).toFixed(2)}`;
+
+const refundTarget = (complaint: IComplaintForEmail) => {
+    if (complaint.paymentStatus !== "REFUNDED") {
+        return null;
+    }
+
+    const method = complaint.payments?.find((payment) => payment.status === "REFUNDED")?.method ?? "CARD";
+
+    return REFUND_TARGETS[method] ?? "your card";
+};
 
 const welcome = (user: IPerson) => {
     return sendEmail({ to: user.email, ...EmailTemplates.welcome(user.name) });
@@ -70,12 +86,7 @@ const complaintStatusChanged = async (complaint: IComplaintForEmail) => {
     if (complaint.status === "REJECTED") {
         await sendEmail({
             to: complaint.citizen.email,
-            ...EmailTemplates.complaintRejected(
-                complaint.citizen.name,
-                complaint,
-                complaint.rejectionReason,
-                complaint.paymentStatus === "REFUNDED"
-            ),
+            ...EmailTemplates.complaintRejected(complaint.citizen.name, complaint, complaint.rejectionReason, refundTarget(complaint)),
         });
     }
 };
