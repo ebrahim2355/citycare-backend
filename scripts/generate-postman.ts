@@ -51,6 +51,7 @@ const TAG_ORDER = [
 const tokenFor: Record<IEndpointDoc["access"], string | null> = {
     Public: null,
     Stripe: null,
+    SSLCommerz: null,
     Scheduler: "cronSecret",
     Citizen: "citizenToken",
     Staff: "staffToken",
@@ -91,6 +92,8 @@ const fillBody = (body: Record<string, unknown> | undefined, apiPath: string) =>
         ["staffId", "{{staffId}}"],
         ["refreshToken", "{{refreshToken}}"],
         ["sessionId", "{{sessionId}}"],
+        ["tranId", "{{tranId}}"],
+        ["tran_id", "{{tranId}}"],
     ];
 
     for (const [key, value] of variables) {
@@ -184,7 +187,8 @@ const savers: Record<string, string[]> = {
     "post /complaints/{id}/comments": save(["pm.collectionVariables.set('commentId', body.data.id);"]),
     "post /payments/initiate": save([
         "pm.collectionVariables.set('paymentId', body.data.payment.id);",
-        "pm.collectionVariables.set('sessionId', body.data.payment.transactionId);",
+        "const reference = body.data.payment.provider === 'SSLCOMMERZ' ? 'tranId' : 'sessionId';",
+        "pm.collectionVariables.set(reference, body.data.payment.transactionId);",
         "console.log('Open this link in a browser to pay:', body.data.checkoutUrl);",
     ]),
     "post /admin/users": save(["pm.collectionVariables.set('userId', body.data.id);"]),
@@ -303,7 +307,8 @@ const demoSteps: [string, string, string, IRequestOptions][] = [
             token: "citizenToken",
             body: { complaintId: "{{serviceRequestId}}" },
             test: savers["post /payments/initiate"],
-            description: "Copy checkoutUrl from the response, open it in a browser and pay with the test card 4242 4242 4242 4242.",
+            description:
+                "Copy checkoutUrl from the response, open it in a browser and pay with the test card 4242 4242 4242 4242. Send method BKASH or NAGAD to pay through SSLCommerz instead, then verify with tranId.",
         },
     ],
     ["Citizen verifies the payment", "post", "/payments/verify", { token: "citizenToken", body: { sessionId: "{{sessionId}}" } }],
@@ -340,7 +345,8 @@ const folders = new Map<string, IFolder>();
 for (const endpoint of endpoints) {
     const folder = folders.get(endpoint.tag) ?? { name: endpoint.tag, item: [] };
     const key = `${endpoint.method} ${endpoint.path}`;
-    const query = (endpoint.query ?? []).map((name) => (name === "session_id" ? ([name, "{{sessionId}}"] as [string, string]) : name));
+    const queryValues: Record<string, string> = { session_id: "{{sessionId}}" };
+    const query = (endpoint.query ?? []).map((name) => (queryValues[name] ? ([name, queryValues[name]] as [string, string]) : name));
 
     folder.item.push(
         request(endpoint.summary, endpoint.method, resolvePath(endpoint.path), {
@@ -374,6 +380,7 @@ const variables = [
     "commentId",
     "paymentId",
     "sessionId",
+    "tranId",
     "messageId",
     "notificationId",
     "cronSecret",

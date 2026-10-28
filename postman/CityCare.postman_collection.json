@@ -824,7 +824,7 @@
                 "initiate"
               ]
             },
-            "description": "Copy checkoutUrl from the response, open it in a browser and pay with the test card 4242 4242 4242 4242.",
+            "description": "Copy checkoutUrl from the response, open it in a browser and pay with the test card 4242 4242 4242 4242. Send method BKASH or NAGAD to pay through SSLCommerz instead, then verify with tranId.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -855,7 +855,8 @@
                   "const body = pm.response.json();",
                   "if (body.success && body.data) {",
                   "    pm.collectionVariables.set('paymentId', body.data.payment.id);",
-                  "    pm.collectionVariables.set('sessionId', body.data.payment.transactionId);",
+                  "    const reference = body.data.payment.provider === 'SSLCOMMERZ' ? 'tranId' : 'sessionId';",
+                  "    pm.collectionVariables.set(reference, body.data.payment.transactionId);",
                   "    console.log('Open this link in a browser to pay:', body.data.checkoutUrl);",
                   "}"
                 ]
@@ -3105,7 +3106,29 @@
       "name": "Payments",
       "item": [
         {
-          "name": "Create a Stripe Checkout session for a service request",
+          "name": "Get the payment methods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "methods"
+              ]
+            },
+            "description": "Access: Public. Card goes through Stripe, bKash and Nagad go through SSLCommerz. available is false when the keys of that provider are not set on the server.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a card, bKash or Nagad checkout for a service request",
           "request": {
             "method": "POST",
             "header": [
@@ -3124,7 +3147,7 @@
                 "initiate"
               ]
             },
-            "description": "Access: Citizen. Open checkoutUrl in a browser to pay. A frontend can send clientUrl to get the user back on its own pages.",
+            "description": "Access: Citizen. method is CARD (Stripe Checkout, the default), BKASH or NAGAD (SSLCommerz, straight to that wallet). Open checkoutUrl in a browser to pay. A frontend can send clientUrl to get the user back on its own pages.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -3137,7 +3160,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"complaintId\": \"{{serviceRequestId}}\"\n}",
+              "raw": "{\n    \"complaintId\": \"{{serviceRequestId}}\",\n    \"method\": \"BKASH\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3155,7 +3178,8 @@
                   "const body = pm.response.json();",
                   "if (body.success && body.data) {",
                   "    pm.collectionVariables.set('paymentId', body.data.payment.id);",
-                  "    pm.collectionVariables.set('sessionId', body.data.payment.transactionId);",
+                  "    const reference = body.data.payment.provider === 'SSLCOMMERZ' ? 'tranId' : 'sessionId';",
+                  "    pm.collectionVariables.set(reference, body.data.payment.transactionId);",
                   "    console.log('Open this link in a browser to pay:', body.data.checkoutUrl);",
                   "}"
                 ]
@@ -3164,7 +3188,7 @@
           ]
         },
         {
-          "name": "Stripe sends the user here after a successful payment",
+          "name": "Check a payment after a successful checkout",
           "request": {
             "method": "GET",
             "header": [],
@@ -3181,10 +3205,15 @@
                 {
                   "key": "session_id",
                   "value": "{{sessionId}}"
+                },
+                {
+                  "key": "tran_id",
+                  "value": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Access: Public. The server checks the session with Stripe before it completes the payment.",
+            "description": "Access: Public. Stripe sends the user here with session_id. Send tran_id for a bKash or Nagad payment. The server asks the provider before it completes the payment.",
             "auth": {
               "type": "noauth"
             }
@@ -3192,7 +3221,7 @@
           "response": []
         },
         {
-          "name": "Stripe sends the user here when the checkout is cancelled",
+          "name": "Close a checkout that the user left",
           "request": {
             "method": "GET",
             "header": [],
@@ -3209,10 +3238,15 @@
                 {
                   "key": "session_id",
                   "value": "{{sessionId}}"
+                },
+                {
+                  "key": "tran_id",
+                  "value": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Access: Public.",
+            "description": "Access: Public. Stripe sends the user here with session_id. Send tran_id for a bKash or Nagad payment. A payment that was paid after all is completed instead.",
             "auth": {
               "type": "noauth"
             }
@@ -3220,7 +3254,7 @@
           "response": []
         },
         {
-          "name": "Verify a checkout session with Stripe",
+          "name": "Verify a payment with Stripe or SSLCommerz",
           "request": {
             "method": "POST",
             "header": [
@@ -3239,7 +3273,7 @@
                 "verify"
               ]
             },
-            "description": "Access: Citizen.",
+            "description": "Access: Citizen. Send sessionId for a card payment or tranId for a bKash or Nagad payment.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -3252,7 +3286,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"sessionId\": \"{{sessionId}}\"\n}",
+              "raw": "{\n    \"tranId\": \"{{tranId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3285,6 +3319,175 @@
           "response": []
         },
         {
+          "name": "SSLCommerz sends the user here after a bKash or Nagad payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/sslcommerz/success",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "sslcommerz",
+                "success"
+              ],
+              "query": [
+                {
+                  "key": "client",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: SSLCommerz. SSLCommerz posts a form with tran_id. The server never trusts the form: it looks the transaction up and validates it with the SSLCommerz API, then checks the amount and the currency. With an allowed client in the query it redirects (303) to <client>/payment/success?tran_id=..., otherwise it answers with JSON.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tran_id\": \"{{tranId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SSLCommerz sends the user here when the payment failed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/sslcommerz/fail",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "sslcommerz",
+                "fail"
+              ],
+              "query": [
+                {
+                  "key": "client",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: SSLCommerz. The payment becomes FAILED unless SSLCommerz reports it as paid. Redirects to <client>/payment/cancel?tran_id=... when an allowed client is in the query.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tran_id\": \"{{tranId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SSLCommerz sends the user here when the payment was cancelled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/sslcommerz/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "sslcommerz",
+                "cancel"
+              ],
+              "query": [
+                {
+                  "key": "client",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Access: SSLCommerz. The payment becomes CANCELLED unless SSLCommerz reports it as paid. Redirects to <client>/payment/cancel?tran_id=... when an allowed client is in the query.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tran_id\": \"{{tranId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SSLCommerz instant payment notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/sslcommerz/ipn",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "sslcommerz",
+                "ipn"
+              ]
+            },
+            "description": "Access: SSLCommerz. Called by SSLCommerz server to server, so a payment is completed even if the user closes the browser. The status in the form is only a hint: the server checks the transaction with the SSLCommerz API.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tran_id\": \"{{tranId}}\",\n    \"status\": \"VALID\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get the payment history",
           "request": {
             "method": "GET",
@@ -3300,6 +3503,11 @@
               "query": [
                 {
                   "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "method",
                   "value": "",
                   "disabled": true
                 },
@@ -3389,7 +3597,7 @@
                 "refund"
               ]
             },
-            "description": "Access: Admin. Refunds are automatic. This endpoint is for a retry when an automatic refund failed.",
+            "description": "Access: Admin. Refunds are automatic and go back through the provider of the payment (Stripe or SSLCommerz). This endpoint is for a retry when an automatic refund failed. An extra payment for a request that was paid twice can be refunded at any time.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -4415,6 +4623,35 @@
           "response": []
         },
         {
+          "name": "Check bKash and Nagad payments that are still open",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/payment-check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "payment-check"
+              ]
+            },
+            "description": "Access: Scheduler. Called once a day by Vercel Cron with Authorization: Bearer CRON_SECRET. Every bKash or Nagad payment that is still PENDING after 45 minutes is checked with SSLCommerz. A paid one is completed, an unpaid one is cancelled. Returns how many were checked, settled and closed.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cronSecret}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Check that the API process is running",
           "request": {
             "method": "GET",
@@ -4510,6 +4747,10 @@
     },
     {
       "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "tranId",
       "value": ""
     },
     {

@@ -8,6 +8,7 @@ type TAccess =
     | "Citizen or Admin"
     | "Staff or Admin"
     | "Stripe"
+    | "SSLCommerz"
     | "Scheduler";
 
 export interface IEndpointDoc {
@@ -42,6 +43,14 @@ export const endpoints: IEndpointDoc[] = [
         summary: "Escalate complaints that missed their deadline",
         access: "Scheduler",
         note: "Called once a day by Vercel Cron with Authorization: Bearer CRON_SECRET. Each overdue open complaint is escalated once: its priority goes up one level, the timeline and the audit log get a row, and the admins and the staff member are notified. Read notifications older than 90 days are removed.",
+    },
+    {
+        method: "get",
+        path: "/jobs/payment-check",
+        tag: "System",
+        summary: "Check bKash and Nagad payments that are still open",
+        access: "Scheduler",
+        note: "Called once a day by Vercel Cron with Authorization: Bearer CRON_SECRET. Every bKash or Nagad payment that is still PENDING after 45 minutes is checked with SSLCommerz. A paid one is completed, an unpaid one is cancelled. Returns how many were checked, settled and closed.",
     },
     {
         method: "get",
@@ -358,39 +367,49 @@ export const endpoints: IEndpointDoc[] = [
         access: "Any logged in user",
     },
     {
+        method: "get",
+        path: "/payments/methods",
+        tag: "Payments",
+        summary: "Get the payment methods",
+        access: "Public",
+        note: "Card goes through Stripe, bKash and Nagad go through SSLCommerz. available is false when the keys of that provider are not set on the server.",
+    },
+    {
         method: "post",
         path: "/payments/initiate",
         tag: "Payments",
-        summary: "Create a Stripe Checkout session for a service request",
+        summary: "Start a card, bKash or Nagad checkout for a service request",
         access: "Citizen",
-        note: "Open checkoutUrl in a browser to pay. A frontend can send clientUrl to get the user back on its own pages.",
-        body: { complaintId: uuid },
+        note: "method is CARD (Stripe Checkout, the default), BKASH or NAGAD (SSLCommerz, straight to that wallet). Open checkoutUrl in a browser to pay. A frontend can send clientUrl to get the user back on its own pages.",
+        body: { complaintId: uuid, method: "BKASH" },
         successStatus: 201,
     },
     {
         method: "get",
         path: "/payments/success",
         tag: "Payments",
-        summary: "Stripe sends the user here after a successful payment",
+        summary: "Check a payment after a successful checkout",
         access: "Public",
-        note: "The server checks the session with Stripe before it completes the payment.",
-        query: ["session_id"],
+        note: "Stripe sends the user here with session_id. Send tran_id for a bKash or Nagad payment. The server asks the provider before it completes the payment.",
+        query: ["session_id", "tran_id"],
     },
     {
         method: "get",
         path: "/payments/cancel",
         tag: "Payments",
-        summary: "Stripe sends the user here when the checkout is cancelled",
+        summary: "Close a checkout that the user left",
         access: "Public",
-        query: ["session_id"],
+        note: "Stripe sends the user here with session_id. Send tran_id for a bKash or Nagad payment. A payment that was paid after all is completed instead.",
+        query: ["session_id", "tran_id"],
     },
     {
         method: "post",
         path: "/payments/verify",
         tag: "Payments",
-        summary: "Verify a checkout session with Stripe",
+        summary: "Verify a payment with Stripe or SSLCommerz",
         access: "Citizen",
-        body: { sessionId: "cs_test_a1b2c3d4" },
+        note: "Send sessionId for a card payment or tranId for a bKash or Nagad payment.",
+        body: { tranId: "CC0F3A9B27C4D15E8A6B90C2" },
     },
     {
         method: "post",
@@ -401,12 +420,51 @@ export const endpoints: IEndpointDoc[] = [
         note: "Called by Stripe only. The signature is verified with STRIPE_WEBHOOK_SECRET.",
     },
     {
+        method: "post",
+        path: "/payments/sslcommerz/success",
+        tag: "Payments",
+        summary: "SSLCommerz sends the user here after a bKash or Nagad payment",
+        access: "SSLCommerz",
+        note: "SSLCommerz posts a form with tran_id. The server never trusts the form: it looks the transaction up and validates it with the SSLCommerz API, then checks the amount and the currency. With an allowed client in the query it redirects (303) to <client>/payment/success?tran_id=..., otherwise it answers with JSON.",
+        query: ["client"],
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2" },
+    },
+    {
+        method: "post",
+        path: "/payments/sslcommerz/fail",
+        tag: "Payments",
+        summary: "SSLCommerz sends the user here when the payment failed",
+        access: "SSLCommerz",
+        note: "The payment becomes FAILED unless SSLCommerz reports it as paid. Redirects to <client>/payment/cancel?tran_id=... when an allowed client is in the query.",
+        query: ["client"],
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2" },
+    },
+    {
+        method: "post",
+        path: "/payments/sslcommerz/cancel",
+        tag: "Payments",
+        summary: "SSLCommerz sends the user here when the payment was cancelled",
+        access: "SSLCommerz",
+        note: "The payment becomes CANCELLED unless SSLCommerz reports it as paid. Redirects to <client>/payment/cancel?tran_id=... when an allowed client is in the query.",
+        query: ["client"],
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2" },
+    },
+    {
+        method: "post",
+        path: "/payments/sslcommerz/ipn",
+        tag: "Payments",
+        summary: "SSLCommerz instant payment notification",
+        access: "SSLCommerz",
+        note: "Called by SSLCommerz server to server, so a payment is completed even if the user closes the browser. The status in the form is only a hint: the server checks the transaction with the SSLCommerz API.",
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2", status: "VALID" },
+    },
+    {
         method: "get",
         path: "/payments",
         tag: "Payments",
         summary: "Get the payment history",
         access: "Citizen or Admin",
-        query: ["status", "complaintId", "citizenId", ...pagination],
+        query: ["status", "method", "complaintId", "citizenId", ...pagination],
     },
     { method: "get", path: "/payments/{id}", tag: "Payments", summary: "Get one payment", access: "Citizen or Admin" },
     {
@@ -415,7 +473,7 @@ export const endpoints: IEndpointDoc[] = [
         tag: "Payments",
         summary: "Refund a payment of a rejected or cancelled request",
         access: "Admin",
-        note: "Refunds are automatic. This endpoint is for a retry when an automatic refund failed.",
+        note: "Refunds are automatic and go back through the provider of the payment (Stripe or SSLCommerz). This endpoint is for a retry when an automatic refund failed. An extra payment for a request that was paid twice can be refunded at any time.",
     },
     { method: "get", path: "/stats/public", tag: "Stats", summary: "Get public statistics", access: "Public", note: "Cached in redis." },
     {
@@ -652,7 +710,7 @@ const buildPaths = () => {
     const paths: Record<string, Record<string, unknown>> = {};
 
     for (const endpoint of endpoints) {
-        const isSecured = endpoint.access !== "Public" && endpoint.access !== "Stripe";
+        const isSecured = !["Public", "Stripe", "SSLCommerz"].includes(endpoint.access);
         const pathParams = [...endpoint.path.matchAll(/\{(\w+)\}/g)].map((match) => match[1] as string);
 
         const parameters = [

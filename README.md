@@ -37,11 +37,12 @@ The seed script creates these accounts.
 
 The seed also adds a staff member for every department, more citizens (`citizen2@citycare.com` to `citizen6@citycare.com`, same password), a few weeks of past complaints with real locations around Dhaka, messages, supporters and notifications, so every dashboard and map has data.
 
-Stripe is in test mode. Pay with the card `4242 4242 4242 4242`, any future date and any CVC.
+Payments run in test mode. Pay by card through Stripe with `4242 4242 4242 4242`, any future date and any CVC, or pick bKash or Nagad, which open the SSLCommerz sandbox, where the **Success** button completes the payment.
 
 ## Highlights
 
-- **77 endpoints** for three roles, documented in Swagger and in a generated Postman collection.
+- **83 endpoints** for three roles, documented in Swagger and in a generated Postman collection.
+- **Card, bKash and Nagad.** Stripe Checkout for cards and SSLCommerz for the two mobile wallets, behind one checkout endpoint, with the same settlement, refunds and history for both.
 - **A real workflow engine.** Every status change is checked against the allowed transitions and saved together with its timeline entry, its audit log row and its notifications in one transaction.
 - **Safe under load.** Assignment, payment settlement and refunds lock rows in a fixed order, so parallel requests can neither break the staff capacity limit nor deadlock. If the database still reports a conflict, the client gets `409 Please try again`.
 - **Maps and community.** Complaints can carry a location. Public reports feed a city map, the wizard finds the same problem nearby with a distance query, and citizens can support each other's reports.
@@ -110,9 +111,12 @@ A citizen registers by themselves. Staff and admin accounts are created by an ad
 
 **Payments**
 
-- Stripe Checkout with webhook, success and cancel callbacks, verification and payment history
-- Idempotent settlement: the callback, the webhook and the verify endpoint can all arrive and the payment completes once
-- Automatic refund when a paid request is rejected or cancelled
+- Card payments with Stripe Checkout: webhook, success and cancel callbacks, verification and payment history
+- bKash and Nagad with SSLCommerz: the citizen goes straight to the chosen wallet. Success, fail and cancel returns, the IPN and verification all ask the SSLCommerz validation API before anything changes, and the amount and currency must match the fee
+- Idempotent settlement: the callback, the webhook or IPN and the verify endpoint can all arrive and the payment completes once
+- Automatic refund through the same provider when a paid request is rejected or cancelled
+- A second payment for a request that is already paid (for example an old bKash tab paid after a Nagad payment) is refunded by itself, and the request stays paid
+- A daily job checks bKash and Nagad payments that are still open after 45 minutes, completes the paid ones and cancels the rest
 
 **Admin tools**
 
@@ -139,13 +143,13 @@ A citizen registers by themselves. Staff and admin accounts are created by an ad
 | Database | PostgreSQL with Prisma ORM 7 and the pg driver adapter |
 | Validation | Zod |
 | Authentication | Custom JWT, bcrypt, Google OAuth (google-auth-library) |
-| Payment | Stripe Checkout |
+| Payment | Stripe Checkout (card), SSLCommerz (bKash and Nagad) |
 | Cache and rate limit | Redis (ioredis, express-rate-limit, rate-limit-redis) |
 | File upload | Multer, Cloudinary |
 | Email | Nodemailer |
 | Logging | pino and pino-http |
 | Security | helmet, CORS allow list, rate limiting |
-| Testing | Vitest, Supertest, fakes for Stripe, Cloudinary, Google and email |
+| Testing | Vitest, Supertest, fakes for Stripe, SSLCommerz, Cloudinary, Google and email |
 | Lint and format | Biome |
 | Docs | Swagger (OpenAPI), Postman |
 | Delivery | GitHub Actions, Docker, Vercel with Vercel Cron, Dependabot |
@@ -165,7 +169,7 @@ Route  ->  Middlewares (request id and logging, rate limit, auth, role, validati
 
 ```text
 prisma
-├── migrations          14 migrations
+├── migrations          15 migrations
 ├── schema.prisma
 └── seed.ts             with seed-geo.ts and seed-community.ts
 src
@@ -174,7 +178,7 @@ src
 ├── config              environment variables, checked with Zod at startup
 ├── docs                Swagger document and docs route
 ├── errors              AppError class
-├── lib                 prisma, redis, logger, stripe, google, mailer, cloudinary clients
+├── lib                 prisma, redis, logger, stripe, sslcommerz, google, mailer, cloudinary clients
 ├── middlewares         auth, cron auth, http logger, validation, rate limit, upload, error handler
 ├── modules
 │   ├── auth            register, login, tokens, password reset, google login
@@ -183,7 +187,7 @@ src
 │   ├── category
 │   ├── complaint       complaints, assignment, workflow, photos, messages, community, escalation
 │   ├── notification    in-app inbox and email templates
-│   ├── payment         checkout, settlement (webhook), refund, history
+│   ├── payment         checkout, settlement (webhook), sslcommerz (bKash, Nagad), refund, history
 │   ├── stats
 │   ├── contact         contact form
 │   ├── admin           user management, staff workload, messages
@@ -196,7 +200,7 @@ src
 tests
 ├── unit
 ├── integration         the real app against PostgreSQL and Redis
-├── fakes               Stripe, Cloudinary, Google and email
+├── fakes               Stripe, SSLCommerz, Cloudinary, Google and email
 └── helpers
 ```
 
@@ -293,8 +297,11 @@ erDiagram
         string id PK
         string complaintId FK
         decimal amount
+        enum provider "STRIPE, SSLCOMMERZ"
+        enum method "CARD, BKASH, NAGAD"
         enum status
         string transactionId UK
+        decimal chargedAmount
     }
     FEEDBACK {
         string id PK
@@ -325,11 +332,11 @@ erDiagram
     }
 ```
 
-- **Constraints**: unique email, tracking code, token hash and Stripe session id. Check constraints in the database for the fee, the SLA hours, the rating (1 to 5), the payment amount and the coordinates
+- **Constraints**: unique email, tracking code, token hash and payment transaction id (the Stripe session id or the SSLCommerz `tran_id`). Check constraints in the database for the fee, the SLA hours, the rating (1 to 5), the payment amounts and the coordinates
 - **Indexes**: on the columns of every filter, for example `(citizenId, status)`, `(assignedStaffId, status)`, `(status, dueAt)`, `(isPublic, status)`, `(latitude, longitude)`, `(userId, readAt)` and `createdAt`
 - **Transactions**: every status change saves the complaint, the timeline row, the audit log and the notifications together
 - **Soft delete**: a `deletedAt` column. Deleted rows stay in the database and are hidden from every query
-- **Migrations and seed**: 14 migrations in `prisma/migrations`, one for each feature, and an idempotent seed script
+- **Migrations and seed**: 15 migrations in `prisma/migrations`, one for each feature, and an idempotent seed script
 
 ## Concurrency and Consistency
 
@@ -360,7 +367,7 @@ stateDiagram-v2
     CANCELLED --> [*]
 ```
 
-A status change that is not in this diagram is refused with `409`. When a paid request is rejected or cancelled, the fee is refunded through Stripe.
+A status change that is not in this diagram is refused with `409`. When a paid request is rejected or cancelled, the fee is refunded through the provider it was paid with (Stripe or SSLCommerz).
 
 ## Deadline Escalation
 
@@ -383,6 +390,10 @@ Admins run the same check with `POST /admin/sla-check`. The job endpoint compare
 
 ## Payment Flow
 
+`GET /payments/methods` lists the methods and whether their keys are set. `POST /payments/initiate` takes `method`: `CARD` (the default) opens Stripe Checkout, `BKASH` and `NAGAD` open SSLCommerz.
+
+**Card (Stripe)**
+
 1. The citizen creates a service request. Its status is `PENDING_PAYMENT`
 2. `POST /payments/initiate` creates a Stripe Checkout session and returns `checkoutUrl`
 3. The citizen pays on the Stripe page
@@ -391,7 +402,33 @@ Admins run the same check with `POST /admin/sla-check`. The job endpoint compare
 6. The payment becomes `COMPLETED`, the request becomes `SUBMITTED` and the deadline starts
 7. `GET /payments` and `GET /payments/:id` show the status
 
-A frontend can send `clientUrl` to `POST /payments/initiate`. Then Stripe sends the user back to the frontend, and the frontend calls `POST /payments/verify`.
+**bKash and Nagad (SSLCommerz)**
+
+```mermaid
+sequenceDiagram
+    participant Citizen
+    participant Web as Frontend
+    participant API
+    participant SSL as SSLCommerz
+    Citizen->>Web: Pay with bKash
+    Web->>API: POST /payments/initiate (method BKASH, clientUrl)
+    API->>SSL: open a session (tran_id, fee, success, fail, cancel and IPN URLs)
+    SSL-->>API: gateway list
+    API-->>Web: checkoutUrl of the bKash gateway
+    Citizen->>SSL: pays in bKash
+    SSL->>API: POST /payments/sslcommerz/success (form with tran_id)
+    API->>SSL: transaction query and validation API
+    API->>API: amount and currency match, settle in one transaction
+    API-->>Citizen: 303 to the frontend /payment/success?tran_id=...
+    SSL->>API: POST /payments/sslcommerz/ipn (also when the browser was closed)
+```
+
+- The form that SSLCommerz posts is never trusted. The server only takes `tran_id` from it and asks the SSLCommerz API for the real status
+- The fee is sent in `PAYMENT_CURRENCY`. SSLCommerz converts it to taka, and the payment keeps the charged taka amount (`chargedAmount`) for the receipt and for the refund
+- A failed or cancelled payment sends the citizen to `/payment/cancel?tran_id=...`, and they can try again with any method
+- Starting a new checkout closes the open one: an open Stripe session is expired, an open SSLCommerz payment is checked once more and cancelled
+
+A frontend sends `clientUrl` to `POST /payments/initiate`. Then the citizen comes back to the frontend, and the frontend calls `POST /payments/verify` with `sessionId` (card) or `tranId` (bKash and Nagad).
 
 ## API Response Format
 
@@ -422,7 +459,7 @@ Protected routes need the header `Authorization: Bearer <accessToken>`. Every re
 
 Base URL: `/api/v1`
 
-The API has 77 endpoints.
+The API has 83 endpoints.
 
 ### Auth
 
@@ -512,11 +549,16 @@ The API has 77 endpoints.
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
-| POST | `/payments/initiate` | Citizen | Create a Stripe Checkout session for a service request |
-| GET | `/payments/success` | Public | Stripe sends the user here after a successful payment |
-| GET | `/payments/cancel` | Public | Stripe sends the user here when the checkout is cancelled |
-| POST | `/payments/verify` | Citizen | Verify a checkout session with Stripe |
+| GET | `/payments/methods` | Public | Get the payment methods |
+| POST | `/payments/initiate` | Citizen | Start a card, bKash or Nagad checkout for a service request |
+| GET | `/payments/success` | Public | Check a payment after a successful checkout |
+| GET | `/payments/cancel` | Public | Close a checkout that the user left |
+| POST | `/payments/verify` | Citizen | Verify a payment with Stripe or SSLCommerz |
 | POST | `/payments/webhook` | Stripe | Stripe webhook |
+| POST | `/payments/sslcommerz/success` | SSLCommerz | SSLCommerz sends the user here after a bKash or Nagad payment |
+| POST | `/payments/sslcommerz/fail` | SSLCommerz | SSLCommerz sends the user here when the payment failed |
+| POST | `/payments/sslcommerz/cancel` | SSLCommerz | SSLCommerz sends the user here when the payment was cancelled |
+| POST | `/payments/sslcommerz/ipn` | SSLCommerz | SSLCommerz instant payment notification |
 | GET | `/payments` | Citizen or Admin | Get the payment history |
 | GET | `/payments/:id` | Citizen or Admin | Get one payment |
 | POST | `/payments/:id/refund` | Admin | Refund a payment of a rejected or cancelled request |
@@ -560,6 +602,7 @@ The API has 77 endpoints.
 | GET | `/health/live` | Public | Check that the API process is running |
 | GET | `/health` | Public | Check the API, the database and redis |
 | GET | `/jobs/sla-check` | Scheduler | Escalate complaints that missed their deadline |
+| GET | `/jobs/payment-check` | Scheduler | Check bKash and Nagad payments that are still open |
 
 The public map feed and the tracking endpoint also accept an access token. With it, each report says if it belongs to you (`isMine`) and if you support it (`supportedByMe`).
 
@@ -570,7 +613,7 @@ The public map feed and the tracking endpoint also accept an access token. With 
 - helmet security headers, a CORS allow list and a JSON body size limit
 - Rate limiting on every route and a stricter limit on the auth routes
 - Zod validation on every body, query and path parameter
-- The Stripe webhook signature is verified. Uploaded files are checked by their real content, not only by the file name
+- The Stripe webhook signature is verified. SSLCommerz returns and IPN calls are checked with the SSLCommerz validation API, and the return only redirects to a frontend in the allowed list. Uploaded files are checked by their real content, not only by the file name
 - Internal notes, private reports and personal data never leave the API for people who should not see them. Integration tests check each of these rules
 - CSV cells that start with `=`, `+`, `-`, `@`, a tab or a carriage return are neutralised, so an export cannot run a formula in a spreadsheet
 
@@ -579,9 +622,9 @@ The public map feed and the tracking endpoint also accept an access token. With 
 | Suite | Files | What it covers |
 | --- | --- | --- |
 | Unit | 9 | Validation schemas, tokens, CSV writing, distances, client IP, upload checks, the error handler and helpers |
-| Integration | 23 | The real Express app against PostgreSQL and Redis: auth and Google login, the full workflow, assignment races, payments with the Stripe webhook, refunds, photos, messages, community, notifications, the deadline job, exports, caching, rate limits, emails and the API docs |
+| Integration | 24 | The real Express app against PostgreSQL and Redis: auth and Google login, the full workflow, assignment races, card payments with the Stripe webhook, bKash and Nagad with SSLCommerz returns, IPN and the payment check job, refunds, photos, messages, community, notifications, the deadline job, exports, caching, rate limits, emails and the API docs |
 
-466 tests in total. Stripe, Cloudinary, Google and email are replaced by fakes, so the tests never call a real service and never need real keys.
+494 tests in total. Stripe, SSLCommerz, Cloudinary, Google and email are replaced by fakes, so the tests never call a real service and never need real keys.
 
 ```bash
 bun run test                  # every test
@@ -664,16 +707,19 @@ The API runs on http://localhost:5000 and the docs are on http://localhost:5000/
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `JWT_ACCESS_SECRET` | Yes | A random string of at least 32 characters |
-| `APP_URL` | In production | Public URL of this API. Used for the Google and Stripe callbacks |
+| `APP_URL` | In production | Public URL of this API. Used for the Google, Stripe and SSLCommerz callbacks |
 | `REDIS_URL` | No | Redis for the cache and the rate limit. Without it the cache is off and the limit is kept in memory |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | For payments | Stripe test keys |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | For card payments | Stripe test keys |
+| `SSLCOMMERZ_STORE_ID`, `SSLCOMMERZ_STORE_PASSWORD` | For bKash and Nagad | SSLCommerz store id and store password. Get sandbox ones at developer.sslcommerz.com |
+| `SSLCOMMERZ_MODE` | No | `sandbox` (default) or `live` |
+| `PAYMENT_CURRENCY` | No | Currency of the fees, `usd` by default. SSLCommerz converts it to taka |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | For Google login | OAuth client from the Google Cloud console |
 | `EMAIL_USER`, `GOOGLE_APP_PASSWORD` | For emails | Gmail address and its app password. `SMTP_HOST` and `SMTP_PORT` point to another mail server |
 | `EMAIL_SKIP_DOMAINS` | No | Domains that never get an email. Set it to `citycare.com` so the demo accounts do not send mail to a real domain |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | For photo upload | Cloudinary keys |
 | `CLIENT_URL`, `CORS_ORIGINS` | No | Frontend URL and the allowed origins |
 | `INTERNAL_API_KEY` | With a frontend server | Shared with the frontend server. When a request has this key in `x-internal-key`, the API uses `x-client-ip` for the rate limit and the logs, because every request of a server side frontend comes from the same IP |
-| `CRON_SECRET` | For the deadline job | The scheduler sends it as a bearer token to `/api/v1/jobs/sla-check`. Without it the job answers `503` |
+| `CRON_SECRET` | For the scheduled jobs | The scheduler sends it as a bearer token to `/api/v1/jobs/sla-check` and `/api/v1/jobs/payment-check`. Without it the jobs answer `503` |
 | `LOG_LEVEL` | No | `fatal`, `error`, `warn`, `info` (default), `debug`, `trace` or `silent` |
 
 The other variables in `.env.example` have good default values. A feature that has no keys answers with `503` and a clear message. The rest of the API keeps working.
@@ -685,7 +731,7 @@ bun run build
 vercel --prod
 ```
 
-`vercel.json` sends every request to `dist/server.js` and runs the deadline check every day at 02:00 UTC with Vercel Cron. Set the environment variables in the Vercel project (including `CRON_SECRET`, which Vercel sends with every cron call), then run the migrations and the seed against the production database:
+`vercel.json` sends every request to `dist/server.js`, runs the deadline check every day at 02:00 UTC and the open payment check at 02:30 UTC with Vercel Cron. Set the environment variables in the Vercel project (including `CRON_SECRET`, which Vercel sends with every cron call), then run the migrations and the seed against the production database:
 
 ```bash
 bunx prisma migrate deploy
@@ -695,6 +741,7 @@ bun run seed
 After the deploy:
 
 - Stripe: add a webhook for `<APP_URL>/api/v1/payments/webhook` with the events `checkout.session.completed`, `checkout.session.expired` and `charge.refunded`
+- SSLCommerz: nothing to register. Every session sends its own success, fail, cancel and IPN URLs under `<APP_URL>/api/v1/payments/sslcommerz/`
 - Google: add `<APP_URL>/api/v1/auth/google/callback` as an authorized redirect URI of the OAuth client
 
 The API follows the serverless rules: no WebSockets, no files on the local disk and no state in memory. Shared state is in PostgreSQL and Redis, and the only background work is the scheduled job.
