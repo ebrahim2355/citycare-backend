@@ -211,7 +211,9 @@ describe("nearby reports for the wizard", () => {
         await prisma.complaint.createMany({ data: [...corners, closest] });
 
         try {
-            const res = await http(city.citizen.token).get(`/complaints/nearby?latitude=${gulshan.latitude}&longitude=${gulshan.longitude}`);
+            const res = await http(city.citizen.token).get(
+                `/complaints/nearby?latitude=${gulshan.latitude}&longitude=${gulshan.longitude}`
+            );
 
             expect(res.status).toBe(200);
             expect(res.body.data.map((report: IReport) => report.id)).toEqual([closest.id]);
