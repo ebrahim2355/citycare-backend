@@ -409,7 +409,7 @@ export const endpoints: IEndpointDoc[] = [
         summary: "Verify a payment with Stripe or SSLCommerz",
         access: "Citizen",
         note: "Send sessionId for a card payment or tranId for a bKash or Nagad payment.",
-        body: { tranId: "CC0F3A9B27C4D15E8A6B90C2" },
+        body: { tranId: "CC0F3A9B27C4D15E8A6B90C2D4" },
     },
     {
         method: "post",
@@ -427,7 +427,7 @@ export const endpoints: IEndpointDoc[] = [
         access: "SSLCommerz",
         note: "SSLCommerz posts a form with tran_id. The server never trusts the form: it looks the transaction up and validates it with the SSLCommerz API, then checks the amount and the currency. With an allowed client in the query it redirects (303) to <client>/payment/success?tran_id=..., otherwise it answers with JSON.",
         query: ["client"],
-        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2" },
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2D4" },
     },
     {
         method: "post",
@@ -437,7 +437,7 @@ export const endpoints: IEndpointDoc[] = [
         access: "SSLCommerz",
         note: "The payment becomes FAILED unless SSLCommerz reports it as paid. Redirects to <client>/payment/cancel?tran_id=... when an allowed client is in the query.",
         query: ["client"],
-        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2" },
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2D4" },
     },
     {
         method: "post",
@@ -447,7 +447,7 @@ export const endpoints: IEndpointDoc[] = [
         access: "SSLCommerz",
         note: "The payment becomes CANCELLED unless SSLCommerz reports it as paid. Redirects to <client>/payment/cancel?tran_id=... when an allowed client is in the query.",
         query: ["client"],
-        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2" },
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2D4" },
     },
     {
         method: "post",
@@ -456,7 +456,7 @@ export const endpoints: IEndpointDoc[] = [
         summary: "SSLCommerz instant payment notification",
         access: "SSLCommerz",
         note: "Called by SSLCommerz server to server, so a payment is completed even if the user closes the browser. The status in the form is only a hint: the server checks the transaction with the SSLCommerz API.",
-        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2", status: "VALID" },
+        body: { tran_id: "CC0F3A9B27C4D15E8A6B90C2D4", status: "VALID" },
     },
     {
         method: "get",
