@@ -39,6 +39,9 @@ const envSchema = z.object({
     STRIPE_SECRET_KEY: z.string().default(""),
     STRIPE_WEBHOOK_SECRET: z.string().default(""),
     PAYMENT_CURRENCY: z.string().length(3, "PAYMENT_CURRENCY must be a 3 letter code").default("usd"),
+    SSLCOMMERZ_STORE_ID: z.string().default(""),
+    SSLCOMMERZ_STORE_PASSWORD: z.string().default(""),
+    SSLCOMMERZ_MODE: z.enum(["sandbox", "live"], "SSLCOMMERZ_MODE must be sandbox or live").default("sandbox"),
     CLIENT_URL: z.url().optional(),
     CORS_ORIGINS: z.string().default(""),
     INTERNAL_API_KEY: z.string().default(""),
@@ -88,6 +91,12 @@ const config = {
         secretKey: env.STRIPE_SECRET_KEY,
         webhookSecret: env.STRIPE_WEBHOOK_SECRET,
         currency: env.PAYMENT_CURRENCY.toLowerCase(),
+    },
+    sslcommerz: {
+        storeId: env.SSLCOMMERZ_STORE_ID,
+        storePassword: env.SSLCOMMERZ_STORE_PASSWORD,
+        isLive: env.SSLCOMMERZ_MODE === "live",
+        baseUrl: env.SSLCOMMERZ_MODE === "live" ? "https://securepay.sslcommerz.com" : "https://sandbox.sslcommerz.com",
     },
     email: {
         user: env.EMAIL_USER,
