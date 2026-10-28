@@ -83,7 +83,17 @@ export const complaintDetailSelect = {
         orderBy: { createdAt: "asc" },
     },
     payments: {
-        select: { id: true, amount: true, currency: true, status: true, paidAt: true, refundedAt: true, createdAt: true },
+        select: {
+            id: true,
+            amount: true,
+            currency: true,
+            provider: true,
+            method: true,
+            status: true,
+            paidAt: true,
+            refundedAt: true,
+            createdAt: true,
+        },
         orderBy: { createdAt: "desc" },
     },
     updates: {

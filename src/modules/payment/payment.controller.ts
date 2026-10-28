@@ -1,4 +1,5 @@
 import { StatusCodes } from "http-status-codes";
+import logger from "../../lib/logger";
 import { currentUser } from "../../middlewares/auth";
 import catchAsync from "../../utils/catchAsync";
 import { getRequestContext } from "../../utils/requestContext";
@@ -7,6 +8,17 @@ import { PaymentCheckout } from "./payment.checkout";
 import { PaymentRefund } from "./payment.refund";
 import { PaymentService } from "./payment.service";
 import { PaymentSettlement } from "./payment.settlement";
+import { PaymentSslCommerz, type TReturnOutcome } from "./payment.sslcommerz";
+import { allowedClientOrigin } from "./payment.utils";
+import type { TCallbackQuery, TVerifyPaymentPayload } from "./payment.validation";
+
+const getMethods = catchAsync(async (_req, res) => {
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "Payment methods retrieved successfully",
+        data: PaymentService.getMethods(),
+    });
+});
 
 const initiatePayment = catchAsync(async (req, res) => {
     const result = await PaymentCheckout.initiatePayment(currentUser(req), req.body, getRequestContext(req));
@@ -32,7 +44,10 @@ const handleWebhook = catchAsync(async (req, res) => {
 });
 
 const verifyPayment = catchAsync(async (req, res) => {
-    const result = await PaymentSettlement.verifyPayment(currentUser(req), req.body.sessionId);
+    const body = req.body as TVerifyPaymentPayload;
+    const result = body.tranId
+        ? await PaymentSslCommerz.verifyPayment(currentUser(req), body.tranId)
+        : await PaymentSettlement.verifyPayment(currentUser(req), body.sessionId as string);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -42,7 +57,10 @@ const verifyPayment = catchAsync(async (req, res) => {
 });
 
 const handleSuccess = catchAsync(async (_req, res) => {
-    const result = await PaymentSettlement.handleSuccessCallback(res.locals.query.session_id);
+    const query = res.locals.query as TCallbackQuery;
+    const result = query.tran_id
+        ? await PaymentSslCommerz.handleSuccessCallback(query.tran_id)
+        : await PaymentSettlement.handleSuccessCallback(query.session_id as string);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -52,11 +70,59 @@ const handleSuccess = catchAsync(async (_req, res) => {
 });
 
 const handleCancel = catchAsync(async (_req, res) => {
-    const result = await PaymentSettlement.handleCancelCallback(res.locals.query.session_id);
+    const query = res.locals.query as TCallbackQuery;
+    const result = query.tran_id
+        ? await PaymentSslCommerz.handleCancelCallback(query.tran_id)
+        : await PaymentSettlement.handleCancelCallback(query.session_id as string);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         message: result.paid ? "This checkout was already paid" : "Payment cancelled. Nothing was charged and you can try again.",
+        data: result,
+    });
+});
+
+const sslReturnMessages: Record<TReturnOutcome, string> = {
+    success: "Payment is not completed yet",
+    fail: "Payment failed. Nothing was charged and you can try again.",
+    cancel: "Payment cancelled. Nothing was charged and you can try again.",
+};
+
+const handleSslReturn = (outcome: TReturnOutcome) =>
+    catchAsync(async (req, res) => {
+        const tranId = req.body.tran_id as string;
+        const clientOrigin = allowedClientOrigin(res.locals.query?.client);
+
+        if (clientOrigin) {
+            const paid = await PaymentSslCommerz.handleReturn(tranId, outcome).then(
+                (result) => result.paid,
+                (error) => {
+                    logger.warn({ err: error, tranId, outcome }, "SSLCommerz return could not be checked");
+
+                    return false;
+                }
+            );
+            const page = paid || outcome === "success" ? "success" : "cancel";
+
+            res.redirect(StatusCodes.SEE_OTHER, `${clientOrigin}/payment/${page}?tran_id=${encodeURIComponent(tranId)}`);
+            return;
+        }
+
+        const result = await PaymentSslCommerz.handleReturn(tranId, outcome);
+
+        sendResponse(res, {
+            statusCode: StatusCodes.OK,
+            message: result.paid ? "Payment successful. Your service request is submitted." : sslReturnMessages[outcome],
+            data: result,
+        });
+    });
+
+const handleSslIpn = catchAsync(async (req, res) => {
+    const result = await PaymentSslCommerz.handleIpn(req.body.tran_id, req.body.status);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        message: "IPN received",
         data: result,
     });
 });
@@ -93,6 +159,7 @@ const getPaymentById = catchAsync(async (req, res) => {
 });
 
 export const PaymentController = {
+    getMethods,
     getPayments,
     getPaymentById,
     initiatePayment,
@@ -100,5 +167,9 @@ export const PaymentController = {
     verifyPayment,
     handleSuccess,
     handleCancel,
+    sslSuccess: handleSslReturn("success"),
+    sslFail: handleSslReturn("fail"),
+    sslCancel: handleSslReturn("cancel"),
+    handleSslIpn,
     refundPayment,
 };

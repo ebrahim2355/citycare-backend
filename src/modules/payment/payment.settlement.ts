@@ -2,7 +2,14 @@ import { StatusCodes } from "http-status-codes";
 import type Stripe from "stripe";
 import config from "../../config";
 import AppError from "../../errors/AppError";
-import { ComplaintPaymentStatus, ComplaintStatus, NotificationType, PaymentStatus } from "../../generated/prisma/client";
+import {
+    ComplaintPaymentStatus,
+    ComplaintStatus,
+    NotificationType,
+    PaymentProvider,
+    PaymentStatus,
+    type Prisma,
+} from "../../generated/prisma/client";
 import prisma from "../../lib/prisma";
 import getStripe from "../../lib/stripe";
 import type { IAuthUser } from "../../middlewares/auth";
@@ -11,11 +18,18 @@ import { AuditAction, AuditEntity } from "../audit/audit.constant";
 import { addHours, lockComplaint } from "../complaint/complaint.utils";
 import { complaintLabel, Inbox } from "../notification/notification.inbox";
 import { NotificationService } from "../notification/notification.service";
-import { PaymentCheckout } from "./payment.checkout";
 import { paymentSelect } from "./payment.constant";
 import { PaymentRefund } from "./payment.refund";
+import { expireStripeSession } from "./payment.utils";
 
-type TSettleSource = "webhook" | "callback" | "verify";
+export type TSettleSource = "webhook" | "callback" | "verify" | "ipn" | "checkout" | "job";
+
+export type TSettleDetails = Pick<
+    Prisma.PaymentUpdateManyMutationInput,
+    "paymentIntentId" | "validationId" | "bankTransactionId" | "chargedAmount" | "chargedCurrency"
+>;
+
+type TSettleOutcome = "already_settled" | "submitted" | "too_late" | "duplicate";
 
 const getPaymentIntentId = (session: Stripe.Checkout.Session) => {
     return typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent?.id ?? null);
@@ -36,29 +50,30 @@ const findPaymentBySession = async (sessionId: string) => {
 
 const getPayment = (id: string) => prisma.payment.findUniqueOrThrow({ where: { id }, select: paymentSelect });
 
-const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSettleSource) => {
+const settlePaidPayment = async (transactionId: string, details: TSettleDetails, source: TSettleSource) => {
     const payment = await prisma.payment.findUnique({
-        where: { transactionId: session.id },
-        select: { id: true, complaintId: true, citizenId: true },
+        where: { transactionId },
+        select: { id: true, complaintId: true, citizenId: true, provider: true },
     });
 
     if (!payment) {
         return null;
     }
 
-    const outcome = await prisma.$transaction(async (tx): Promise<"already_settled" | "submitted" | "too_late"> => {
+    const outcome = await prisma.$transaction(async (tx): Promise<TSettleOutcome> => {
         const complaint = await lockComplaint(tx, payment.complaintId, { includeDeleted: true });
 
         const settled = await tx.payment.updateMany({
             where: { id: payment.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED] } },
-            data: { status: PaymentStatus.COMPLETED, paidAt: new Date(), paymentIntentId: getPaymentIntentId(session) },
+            data: { ...details, status: PaymentStatus.COMPLETED, paidAt: new Date() },
         });
 
         if (settled.count === 0) {
             return "already_settled";
         }
 
-        const canSubmit = complaint.status === ComplaintStatus.PENDING_PAYMENT && !complaint.deletedAt;
+        const alreadyPaid = complaint.paymentStatus === ComplaintPaymentStatus.PAID;
+        const canSubmit = !alreadyPaid && complaint.status === ComplaintStatus.PENDING_PAYMENT && !complaint.deletedAt;
 
         if (canSubmit) {
             const category = await tx.category.findUniqueOrThrow({ where: { id: complaint.categoryId }, select: { slaHours: true } });
@@ -97,7 +112,7 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
                     note: "Service fee paid. Request submitted.",
                 },
             });
-        } else {
+        } else if (!alreadyPaid) {
             await tx.complaint.update({ where: { id: complaint.id }, data: { paymentStatus: ComplaintPaymentStatus.PAID } });
         }
 
@@ -106,14 +121,25 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
             action: AuditAction.PAYMENT_COMPLETED,
             entityType: AuditEntity.PAYMENT,
             entityId: payment.id,
-            metadata: { complaintId: complaint.id, source, sessionId: session.id, complaintStatus: complaint.status },
+            metadata: {
+                complaintId: complaint.id,
+                source,
+                provider: payment.provider,
+                transactionId,
+                complaintStatus: complaint.status,
+                ...(alreadyPaid ? { duplicate: true } : {}),
+            },
         });
 
-        return canSubmit ? "submitted" : "too_late";
+        return canSubmit ? "submitted" : alreadyPaid ? "duplicate" : "too_late";
     });
 
     if (outcome === "too_late") {
         await PaymentRefund.refundForComplaint(payment.complaintId, null, "The request was already closed when the payment arrived.");
+    }
+
+    if (outcome === "duplicate") {
+        await PaymentRefund.tryRefund(payment.id, null, "The request was already paid, so this second payment was sent back.");
     }
 
     const settledPayment = await getPayment(payment.id);
@@ -125,26 +151,8 @@ const settlePaidSession = async (session: Stripe.Checkout.Session, source: TSett
     return settledPayment;
 };
 
-const cancelPendingPayments = async (complaintId: string) => {
-    const pendingPayments = await prisma.payment.findMany({
-        where: { complaintId, status: PaymentStatus.PENDING },
-        select: { transactionId: true },
-    });
-
-    if (!pendingPayments.length) {
-        return;
-    }
-
-    const stripe = config.stripe.secretKey ? getStripe() : null;
-
-    for (const pendingPayment of pendingPayments) {
-        if (stripe) {
-            await PaymentCheckout.expireSession(stripe, pendingPayment.transactionId);
-        }
-
-        await closeUnpaidSession(pendingPayment.transactionId, "CANCELLED");
-    }
-};
+const settlePaidSession = (session: Stripe.Checkout.Session, source: TSettleSource) =>
+    settlePaidPayment(session.id, { paymentIntentId: getPaymentIntentId(session) }, source);
 
 const closeUnpaidSession = async (sessionId: string, status: "CANCELLED" | "FAILED") => {
     const payment = await prisma.payment.findUnique({ where: { transactionId: sessionId }, select: { id: true, citizenId: true } });
@@ -168,6 +176,27 @@ const closeUnpaidSession = async (sessionId: string, status: "CANCELLED" | "FAIL
             metadata: { sessionId, status },
         });
     });
+};
+
+const cancelPendingPayments = async (complaintId: string) => {
+    const pendingPayments = await prisma.payment.findMany({
+        where: { complaintId, status: PaymentStatus.PENDING },
+        select: { transactionId: true, provider: true },
+    });
+
+    if (!pendingPayments.length) {
+        return;
+    }
+
+    const stripe = config.stripe.secretKey ? getStripe() : null;
+
+    for (const pendingPayment of pendingPayments) {
+        if (stripe && pendingPayment.provider === PaymentProvider.STRIPE) {
+            await expireStripeSession(stripe, pendingPayment.transactionId);
+        }
+
+        await closeUnpaidSession(pendingPayment.transactionId, "CANCELLED");
+    }
 };
 
 const handleWebhook = async (rawBody: Buffer | undefined, signature: string | undefined) => {
@@ -261,7 +290,7 @@ const handleCancelCallback = async (sessionId: string) => {
     }
 
     if (session.status === "open") {
-        await PaymentCheckout.expireSession(stripe, sessionId);
+        await expireStripeSession(stripe, sessionId);
     }
 
     await closeUnpaidSession(sessionId, "CANCELLED");
@@ -270,6 +299,9 @@ const handleCancelCallback = async (sessionId: string) => {
 };
 
 export const PaymentSettlement = {
+    findPaymentBySession,
+    getPayment,
+    settlePaidPayment,
     settlePaidSession,
     closeUnpaidSession,
     cancelPendingPayments,

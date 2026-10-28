@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
 import AppError from "../../errors/AppError";
-import type { ComplaintStatus, Prisma } from "../../generated/prisma/client";
+import type { ComplaintPaymentStatus, ComplaintStatus, Prisma } from "../../generated/prisma/client";
 import { complaintDetailSelect, OPEN_STATUSES } from "./complaint.constant";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -33,6 +33,7 @@ export interface ILockedComplaint {
     id: string;
     trackingCode: string;
     status: ComplaintStatus;
+    paymentStatus: ComplaintPaymentStatus;
     citizenId: string;
     departmentId: string;
     categoryId: string;
@@ -46,7 +47,7 @@ export const lockComplaint = async (
     options: { includeDeleted?: boolean } = {}
 ): Promise<ILockedComplaint> => {
     const rows = await tx.$queryRaw<ILockedComplaint[]>`
-        SELECT "id", "trackingCode", "status", "citizenId", "departmentId", "categoryId", "assignedStaffId", "deletedAt"
+        SELECT "id", "trackingCode", "status", "paymentStatus", "citizenId", "departmentId", "categoryId", "assignedStaffId", "deletedAt"
         FROM "complaints"
         WHERE "id" = ${id}
         FOR UPDATE
